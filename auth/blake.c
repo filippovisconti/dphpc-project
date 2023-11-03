@@ -353,8 +353,14 @@ void blake3_hasher_finalize(
     output_root_bytes(&current_output, out, out_len);
 }
 
-void blake3(bool has_key, u_int8_t *key, const char *derive_key_context,
+void blake3(bool has_key, uint8_t *key, const char *derive_key_context,
     size_t output_len, FILE *input_stream) {
+    // check if file is opened correctly
+    if (input_stream == NULL) {
+        printf("\n[ERROR:] Could not open file\n");
+        exit(1);
+    }
+
     // Initialize the hasher.
     blake3_hasher hasher;
     if (has_key) {

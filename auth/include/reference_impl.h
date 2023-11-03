@@ -46,6 +46,6 @@ void blake3_hasher_update(
 void blake3_hasher_finalize(
     const blake3_hasher *self, void *out, size_t out_len);
 
-void blake3(bool has_key, u_int8_t *key, const char *derive_key_context,
+void blake3(bool has_key, uint8_t *key, const char *derive_key_context,
     size_t output_len, FILE *input_stream);
 #endif  // _BLAKE3_REFERENCE_IMPL_H

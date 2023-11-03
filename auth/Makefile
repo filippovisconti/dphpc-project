@@ -1,18 +1,19 @@
-CC := gcc
-FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O3 -march=native
-INCLUDES := -I include -lm
+FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O0 -march=native
+INCLUDES := -I include -lm -fopenmp
 UNAME := $(shell uname -m)
 
-DEPTH := 23
-ITERATIONS := 5
-FUN_NUMBER := 3
 all: compile
 
-FILES:= $(shell find . -name \*.c)
+# FILES:= $(shell find . -name \*.c)
+FILES:= blake.c benchmark.c sha256.c
 ifeq ($(UNAME), arm64)
+CC := gcc-13
+
+blake:
+	$(CC) $(FLAGS) -o blake3 blake.c main.c $(INCLUDES)
 
 run: compile 
-	./main_arm $(DEPTH) $(ITERATIONS)
+	./main_arm
 
 compile: clean
 	@echo "No PAPI support for arm64"
@@ -22,33 +23,35 @@ debug:
 	$(CC) $(FLAGS) -g -o main_arm $(FILES) $(INCLUDES)
 	
 clean:
-	rm -fR main_arm
+	rm -fR main_arm blake3
 
 else
+CC := gcc
 
-CPATH :="/cluster/apps/gcc-4.8.5/papi-5.5.1-zirk332p6tlx6odos5kq5sem37fpe5qj/include"
-PAPI_ROOT := "/cluster/apps/gcc-4.8.5/papi-5.5.1-zirk332p6tlx6odos5kq5sem37fpe5qj"
 
 PAPI_EVENTS:="PAPI_TOT_INS,PAPI_TOT_CYC,PAPI_VEC_SP,PAPI_VEC_DP"
 PAPI_OUTPUT_DIRECTORY="scratch/measurement"
 PAPI_DEBUG=HIGHLEVEL
 PAPI_EXPORT := LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) PAPI_EVENTS="${PAPI_EVENTS}" PAPI_OUTPUT_DIRECTORY=${PAPI_OUTPUT_DIRECTORY} PAPI_DEBUG=${PAPI_DEBUG}
 
-INCLUDES := -I${CPATH} -L${LD_LIBRARY_PATH} -lm
+INCLUDES := -I${CPATH} -I include -L${LD_LIBRARY_PATH} -lm
 
+
+blake:
+	$(CC) $(FLAGS) -o blake3 blake.c main.c $(INCLUDES)
 print:
 	python3 ${PAPI_DIR}/bin/papi_hl_output_writer.py  --notation=derived --type=summary > papi.log 
 	
-run: compile
-	$(PAPI_EXPORT) taskset --cpu-list 0 ./main 
+run: debug
+	$(PAPI_EXPORT) ./main
 
 
 compile: clean
 	echo "Compiling with PAPI on for x86_64"
-	$(CC) $(FLAGS) -o main $(FILES) $(INCLUDES) -lpapi
+	$(CC) $(FLAGS) -o main $(INCLUDES) -lpapi $(FILES)
 
 debug: clean
-	$(CC) $(FLAGS) -g -o main $(FILES) $(INCLUDES) -lpapi
+	$(CC) $(FLAGS) -ggdb -g -o main $(INCLUDES) -lpapi $(FILES)
 	
 clean:
 	rm -fR main papi_output/* 
@@ -58,13 +61,18 @@ endif
 USER=fvisconti
 REMOTE_HOST = euler
 REMOTE_DIR = /cluster/home/${USER}
-TO_COPY = ./Makefile *.c *.h *.txt
+TO_COPY = Makefile *.c *.txt include *.json batch_script.sh
 
 ssh-copy:
 	@rsync -avz $(TO_COPY) $(USER)@$(REMOTE_HOST):$(REMOTE_DIR)
 
+ssh-download:
+	@rsync -avz $(USER)@$(REMOTE_HOST):$(REMOTE_DIR)/papi_output ./papi_output
+
 ssh-debug:
-	@ssh $(USER)@$(REMOTE_HOST) -t "module load papi && srun make run"
+	# module load gcc/9.3.0 papi/7.0.1
+	# export OMP_NUM_THREADS=30
+	@ssh $(USER)@$(REMOTE_HOST) -t "OMP_NUM_THREADS=30 sbatch batch_script.sh"
 
 
 # gprof:

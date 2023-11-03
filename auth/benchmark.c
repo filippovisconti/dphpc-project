@@ -40,6 +40,7 @@ void handle_error() {
 int main(void) {
 #ifdef _PAPI
     int retval;
+    (void)retval;
 #endif
 
     // FILE *fileForPrinting;
@@ -65,10 +66,17 @@ int main(void) {
     calculate_sha256(file);
     PAPI_REGION_END("sha256");
 
-    uint8_t     key[BLAKE3_KEY_LEN];
-    bool        has_key            = false;
-    const char *derive_key_context = NULL;
-    size_t      output_len         = BLAKE3_OUT_LEN;
+    file = fopen(fileName, "r");
+
+    if (file == NULL) {
+        printf("\n[ERROR:] Could not open file %s\n", fileName);
+        exit(1);
+    }
+
+    uint8_t     key[BLAKE3_KEY_LEN] = {0};
+    bool        has_key             = false;
+    const char *derive_key_context  = NULL;
+    size_t      output_len          = BLAKE3_OUT_LEN;
 
     printf("\n[INFO:] Starting BLAKE3 algorithm.. \n");
     printf(
