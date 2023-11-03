@@ -1,4 +1,4 @@
 #include <stdio.h>
 
-void calculateHash(FILE *file);
+void calculate_sha256(FILE *file);
 void endianCheckPrint();
