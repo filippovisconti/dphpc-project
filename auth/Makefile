@@ -30,7 +30,7 @@ CC := gcc
 
 
 PAPI_EVENTS:="PAPI_TOT_INS,PAPI_TOT_CYC,PAPI_VEC_SP,PAPI_VEC_DP"
-PAPI_OUTPUT_DIRECTORY="scratch/measurement"
+PAPI_OUTPUT_DIRECTORY="measurements"
 PAPI_DEBUG=HIGHLEVEL
 PAPI_EXPORT := LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) PAPI_EVENTS="${PAPI_EVENTS}" PAPI_OUTPUT_DIRECTORY=${PAPI_OUTPUT_DIRECTORY} PAPI_DEBUG=${PAPI_DEBUG}
 
@@ -40,7 +40,7 @@ INCLUDES := -I${CPATH} -I include -L${LD_LIBRARY_PATH} -lm
 blake:
 	$(CC) $(FLAGS) -o blake3 blake.c main.c $(INCLUDES)
 print:
-	python3 ${PAPI_DIR}/bin/papi_hl_output_writer.py  --notation=derived --type=summary > papi.log 
+	python3 ${PAPI_ROOT}/bin/papi_hl_output_writer.py --source measurements/papi_hl_output --notation=derived --type=summary > papi.log
 	
 run: debug
 	$(PAPI_EXPORT) ./main
