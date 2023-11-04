@@ -70,7 +70,7 @@ void calculate_sha256(FILE *file) {
     // The state of the program
     enum status state = READ;
 
-    printf("\n Starting SHA256 algorithm....\n");
+    // printf("\n Starting SHA256 algorithm....\n");
 
     // Declare the K constant
     // Defined in Section 4.2.2
@@ -106,7 +106,7 @@ void calculate_sha256(FILE *file) {
     // For loop to iterate through the message block
     int j;
 
-    printf("\n Initalized variables... Entering loops\n");
+    // printf("\n Initalized variables... Entering loops\n");
 
     while (fillMessageBlock(file, &msgBlock, &state, &numBits)) {
         for (j = 0; j < 16; j++) {
@@ -167,8 +167,8 @@ void calculate_sha256(FILE *file) {
 
     // Print the results
     printf(
-        "\n=================== HASH OUTPUT "
-        "==================================\n\n");
+        "\n=================== SHA256 HASH OUTPUT "
+        "==================================\n");
     printf("%08x", H[0]);
     printf("%08x", H[1]);
     printf("%08x", H[2]);
@@ -179,7 +179,8 @@ void calculate_sha256(FILE *file) {
     printf("%08x", H[7]);
 
     printf(
-        "\n\n=================================================================="
+        "\n===================================================================="
+        "====="
         "\n\n");
 
     fclose(file);
@@ -194,7 +195,7 @@ int fillMessageBlock(FILE *file, union messageBlock *msgBlock,
 
     // If we've finished padding and processing all the message blocks, exit
     if (*state == FINISH) {
-        printf("\n State = FINISH.\n");
+        // printf("\n State = FINISH.\n");
         return 0;
     }
 

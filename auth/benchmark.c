@@ -27,38 +27,37 @@ void handle_error(int retval) {
 }
 #else
 #define PAPI_REGION_BEGIN(name)                                                \
-    printf("PAPI not enabled - region %s start\n", name);
+    // printf("PAPI not enabled - region %s start\n", name);
 
 #define PAPI_REGION_END(name)                                                  \
-    printf("PAPI not enabled - region %s end\n", name);
+    // printf("PAPI not enabled - region %s end\n", name);
 
 void handle_error() {
     exit(1);
 }
 #endif
 
-int main(void) {
+void run_benchmark(char *filename) {
 #ifdef _PAPI
     int retval;
     (void)retval;
 #endif
 
     // FILE *fileForPrinting;
-    FILE *file       = NULL;
-    char  fileName[] = "input.txt";
+    FILE *file = NULL;
 
     // Open a file, specifying which file using command line arguments
-    file = fopen(fileName, "r");
+    file = fopen(filename, "rb");
 
     // First check to make sure the file could be found
     if (file == NULL) {
-        printf("\n[ERROR:] Could not open file %s\n", fileName);
+        printf("\n[ERROR:] Could not open file %s\n", filename);
         exit(1);
     }
 
     // Function calls
-    printf("\n[INFO:] File ok, executing functions.. \n");
-    endianCheckPrint();
+    printf("[INFO:] File ok, executing functions.");
+
     // fileForPrinting = fopen(fileName, "r");
     // printFileContents(fileForPrinting);
 
@@ -66,10 +65,10 @@ int main(void) {
     calculate_sha256(file);
     PAPI_REGION_END("sha256");
 
-    file = fopen(fileName, "r");
+    file = fopen(filename, "r");
 
     if (file == NULL) {
-        printf("\n[ERROR:] Could not open file %s\n", fileName);
+        printf("\n[ERROR:] Could not open file %s\n", filename);
         exit(1);
     }
 
@@ -78,18 +77,36 @@ int main(void) {
     const char *derive_key_context  = NULL;
     size_t      output_len          = BLAKE3_OUT_LEN;
 
-    printf("\n[INFO:] Starting BLAKE3 algorithm.. \n");
+    // printf("[INFO:] Starting BLAKE3 algorithm.. \n");
     printf(
-        "=================== HASH OUTPUT "
-        "==================================\n\n");
+        "=================== BLAKE3 HASH OUTPUT "
+        "==================================\n");
     PAPI_REGION_BEGIN("blake3");
     blake3(has_key, key, derive_key_context, output_len, file);
     PAPI_REGION_END("blake3");
     printf(
-        "\n=================================================================="
-        "\n");
+        "======================================================================"
+        "==="
+        "\n\n");
 
     fclose(file);
+}
+
+int main(void) {
+    endianCheckPrint();
+    char prefix[] = "input_data/input_";
+    char suffix[] = ".txt";
+
+    char *sizes[] = {
+        "1KB", "10KB", "100KB", "1MB", "10MB", "100MB"};  //, "1GB"};
+    size_t num_sizes = 6;
+
+    for (size_t size = 0; size < num_sizes; size++) {
+        char filename[100];
+        sprintf(filename, "%s%s%s", prefix, sizes[size], suffix);
+        printf("[INFO:] Running benchmark for %s\n", filename);
+        run_benchmark(filename);
+    }
 
     return 0;
 }
