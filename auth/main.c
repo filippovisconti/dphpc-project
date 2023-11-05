@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "blake.h"
 #include "reference_impl.h"
 
 // converts a hexadecimal character into a 4-bit integer
@@ -78,8 +77,10 @@ int main(int argc, char **argv) {
     if (use_stdin) input_stream = stdin;
     else input_stream = fopen(filename, "r");  // Open the file for reading
 
-    blake3(has_key, key, derive_key_context, output_len, input_stream);
+    uint8_t *output = malloc(output_len);
+    blake3(has_key, key, derive_key_context, output_len, input_stream, output);
 
+    free(output);
     if (!use_stdin) fclose(input_stream);
     return 0;
 }

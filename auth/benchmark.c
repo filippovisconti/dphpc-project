@@ -76,19 +76,20 @@ void run_benchmark(char *filename) {
     bool        has_key             = false;
     const char *derive_key_context  = NULL;
     size_t      output_len          = BLAKE3_OUT_LEN;
+    uint8_t    *output              = malloc(output_len);
 
     // printf("[INFO:] Starting BLAKE3 algorithm.. \n");
     printf(
         "=================== BLAKE3 HASH OUTPUT "
         "==================================\n");
     PAPI_REGION_BEGIN("blake3");
-    blake3(has_key, key, derive_key_context, output_len, file);
+    blake3(has_key, key, derive_key_context, output_len, file, output);
     PAPI_REGION_END("blake3");
     printf(
         "======================================================================"
         "==="
         "\n\n");
-
+    free(output);
     fclose(file);
 }
 

@@ -9,6 +9,10 @@ FILES:= blake.c benchmark.c sha256.c
 ifeq ($(UNAME), arm64)
 CC := gcc-13
 
+test: clean
+	@$(CC) $(FLAGS) -ggdb -o test blake.c quick_test.c $(INCLUDES)
+	@./test
+
 blake:
 	$(CC) $(FLAGS) -o blake3 blake.c main.c $(INCLUDES)
 
@@ -17,13 +21,13 @@ run: compile
 
 compile: clean
 	@echo "No PAPI support for arm64"
-	$(CC) $(FLAGS) -o main_arm $(FILES) $(INCLUDES)
+	@$(CC) $(FLAGS) -o main_arm $(FILES) $(INCLUDES)
 
 debug:
 	$(CC) $(FLAGS) -g -o main_arm $(FILES) $(INCLUDES)
 	
 clean:
-	rm -fR main_arm blake3
+	@rm -fR main_arm blake3 main_arm.dSYM/ test
 
 else
 CC := gcc
