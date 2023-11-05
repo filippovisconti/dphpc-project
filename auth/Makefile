@@ -61,7 +61,7 @@ endif
 USER=fvisconti
 REMOTE_HOST = euler
 REMOTE_DIR = /cluster/home/${USER}
-TO_COPY = Makefile *.c *.txt include *.json batch_script.sh
+TO_COPY = Makefile *.c *.txt include *.json batch_script.sh gen_test_data.sh
 
 ssh-copy:
 	@rsync -avz $(TO_COPY) $(USER)@$(REMOTE_HOST):$(REMOTE_DIR)

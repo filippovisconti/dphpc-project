@@ -7,5 +7,5 @@
 #SBATCH --error=a.err
 
 module load gcc/9.3.0 papi/7.0.1
-
+sh gen_test_data.sh
 make run >/cluster/home/fvisconti/make_stout.txt

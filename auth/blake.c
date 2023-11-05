@@ -20,11 +20,31 @@ static uint32_t IV[8] = {
 static size_t MSG_PERMUTATION[16] = {
     2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8};
 
+/**
+ * Rotates the bits of a 32-bit unsigned integer to the right by a given number
+ * of positions.
+ *
+ * @param x The 32-bit unsigned integer to rotate.
+ * @param n The number of positions to rotate the bits to the right.
+ * @return The result of rotating the bits of x to the right by n positions.
+ */
 inline static uint32_t rotate_right(uint32_t x, int n) {
     return (x >> n) | (x << (32 - n));
 }
 
 // The mixing function, G, which mixes either a column or a diagonal.
+/**
+ * Performs the G function of the BLAKE hash algorithm on the given state and
+ * message words.
+ *
+ * @param state The current state of the hash algorithm.
+ * @param a The index of the first state word to use in the function.
+ * @param b The index of the second state word to use in the function.
+ * @param c The index of the third state word to use in the function.
+ * @param d The index of the fourth state word to use in the function.
+ * @param mx The first message word to use in the function.
+ * @param my The second message word to use in the function.
+ */
 inline static void g(uint32_t state[16], size_t a, size_t b, size_t c, size_t d,
     uint32_t mx, uint32_t my) {
     state[a] = state[a] + state[b] + mx;
@@ -50,12 +70,27 @@ inline static void round_function(uint32_t state[16], uint32_t m[16]) {
     g(state, 3, 4, 9, 14, m[14], m[15]);
 }
 
+/**
+ * Permutes the given message block using the BLAKE message permutation.
+ *
+ * @param m The message block to permute.
+ */
 inline static void permute(uint32_t m[16]) {
     uint32_t permuted[16];
     for (size_t i = 0; i < 16; i++) { permuted[i] = m[MSG_PERMUTATION[i]]; }
     memcpy(m, permuted, sizeof(permuted));
 }
 
+/**
+ * Compresses a block of data using the BLAKE hash function.
+ *
+ * @param chaining_value The current chaining value.
+ * @param block_words The block of data to compress.
+ * @param counter The current counter value.
+ * @param block_len The length of the block in bytes.
+ * @param flags The current flag value.
+ * @param out The resulting hash value.
+ */
 inline static void compress(const uint32_t chaining_value[8],
     const uint32_t block_words[16], uint64_t counter, uint32_t block_len,
     uint32_t flags, uint32_t out[16]) {
@@ -102,6 +137,13 @@ inline static void compress(const uint32_t chaining_value[8],
     memcpy(out, state, sizeof(state));
 }
 
+/**
+ * Converts an array of little-endian bytes to an array of 32-bit words.
+ *
+ * @param bytes Pointer to the array of bytes to be converted.
+ * @param bytes_len Length of the byte array. Must be a multiple of 4.
+ * @param out Pointer to the output array of 32-bit words.
+ */
 inline static void words_from_little_endian_bytes(
     const void *bytes, size_t bytes_len, uint32_t *out) {
     assert(bytes_len % 4 == 0);
@@ -125,6 +167,12 @@ typedef struct output {
     uint32_t flags;
 } output;
 
+/**
+ * Outputs the chaining value of the Blake hash function.
+ *
+ * @param self The output object.
+ * @param out The output array to store the chaining value.
+ */
 inline static void output_chaining_value(const output *self, uint32_t out[8]) {
     uint32_t out16[16];
     compress(self->input_chaining_value, self->block_words, self->counter,
@@ -132,10 +180,18 @@ inline static void output_chaining_value(const output *self, uint32_t out[8]) {
     memcpy(out, out16, 8 * 4);
 }
 
+/**
+ * Outputs the root bytes of the given output.
+ *
+ * @param self The output object.
+ * @param out The output buffer.
+ * @param out_len The length of the output buffer.
+ */
 inline static void output_root_bytes(
     const output *self, void *out, size_t out_len) {
     uint8_t *out_u8               = (uint8_t *)out;
     uint64_t output_block_counter = 0;
+
     while (out_len > 0) {
         uint32_t words[16];
         compress(self->input_chaining_value, self->block_words,
@@ -143,6 +199,7 @@ inline static void output_root_bytes(
         for (size_t word = 0; word < 16; word++) {
             for (int byte = 0; byte < 4; byte++) {
                 if (out_len == 0) { return; }
+
                 *out_u8 = (uint8_t)(words[word] >> (8 * byte));
                 out_u8++;
                 out_len--;
@@ -152,6 +209,14 @@ inline static void output_root_bytes(
     }
 }
 
+/**
+ * Initializes the state of a BLAKE3 chunk with the given parameters.
+ *
+ * @param self Pointer to the chunk state to be initialized.
+ * @param key_words Array of 8 32-bit integers representing the key.
+ * @param chunk_counter The counter for the current chunk.
+ * @param flags Flags for the chunk state.
+ */
 inline static void chunk_state_init(_blake3_chunk_state *self,
     const uint32_t key_words[8], uint64_t chunk_counter, uint32_t flags) {
     memcpy(self->chaining_value, key_words, sizeof(self->chaining_value));
@@ -162,11 +227,25 @@ inline static void chunk_state_init(_blake3_chunk_state *self,
     self->flags             = flags;
 }
 
+/**
+ * Returns the total length of the chunk state in bytes.
+ *
+ * @param self The pointer to the chunk state.
+ * @return The total length of the chunk state in bytes.
+ */
 inline static size_t chunk_state_len(const _blake3_chunk_state *self) {
     return BLAKE3_BLOCK_LEN * (size_t)self->blocks_compressed +
            (size_t)self->block_len;
 }
 
+/**
+ * Returns the chunk start flag if the number of compressed blocks is 0,
+ * otherwise returns 0.
+ *
+ * @param self Pointer to the _blake3_chunk_state struct.
+ * @return The chunk start flag if the number of compressed blocks is 0,
+ * otherwise returns 0.
+ */
 inline static uint32_t chunk_state_start_flag(const _blake3_chunk_state *self) {
     if (self->blocks_compressed == 0) {
         return CHUNK_START;
@@ -175,6 +254,16 @@ inline static uint32_t chunk_state_start_flag(const _blake3_chunk_state *self) {
     }
 }
 
+/**
+ * Updates the chunk state with the given input data.
+ * If the block buffer is full, compress it and clear it.
+ * More input is coming, so this compression is not CHUNK_END.
+ * Copy input bytes into the block buffer.
+ *
+ * @param self The chunk state to update.
+ * @param input The input data to update the chunk state with.
+ * @param input_len The length of the input data.
+ */
 inline static void chunk_state_update(
     _blake3_chunk_state *self, const void *input, size_t input_len) {
     const uint8_t *input_u8 = (const uint8_t *)input;
@@ -206,6 +295,14 @@ inline static void chunk_state_update(
     }
 }
 
+/**
+ * Returns an output struct containing the input chaining value, block words,
+ * chunk counter, block length, and flags.
+ *
+ * @param self A pointer to the _blake3_chunk_state struct.
+ * @return An output struct containing the input chaining value, block words,
+ * chunk counter, block length, and flags.
+ */
 inline static output chunk_state_output(const _blake3_chunk_state *self) {
     output ret;
     memcpy(ret.input_chaining_value, self->chaining_value,
@@ -218,6 +315,16 @@ inline static output chunk_state_output(const _blake3_chunk_state *self) {
     return ret;
 }
 
+/**
+ * Computes the parent output of a BLAKE3 hash tree given the left and right
+ * child outputs, the key words, and the flags.
+ *
+ * @param left_child_cv The left child output.
+ * @param right_child_cv The right child output.
+ * @param key_words The key words.
+ * @param flags The flags.
+ * @return The parent output.
+ */
 inline static output parent_output(const uint32_t left_child_cv[8],
     const uint32_t right_child_cv[8], const uint32_t key_words[8],
     uint32_t flags) {
@@ -251,11 +358,23 @@ inline static void hasher_init_internal(
 }
 
 // Construct a new `Hasher` for the regular hash function.
+/**
+ * Initializes a Blake3 hasher with the default initialization vector and sets
+ * the output length to 0.
+ *
+ * @param self The Blake3 hasher to initialize.
+ */
 void blake3_hasher_init(blake3_hasher *self) {
     hasher_init_internal(self, IV, 0);
 }
 
 // Construct a new `Hasher` for the keyed hash function.
+/**
+ * Initializes a Blake3 hasher with a given key.
+ *
+ * @param self The Blake3 hasher to be initialized.
+ * @param key The key to be used for the initialization.
+ */
 void blake3_hasher_init_keyed(
     blake3_hasher *self, const uint8_t key[BLAKE3_KEY_LEN]) {
     uint32_t key_words[8];
@@ -265,6 +384,13 @@ void blake3_hasher_init_keyed(
 
 // Construct a new `Hasher` for the key derivation function. The context
 // string should be hardcoded, globally unique, and application-specific.
+/**
+ * Initializes a blake3_hasher instance and derives a key from the given
+ * context.
+ *
+ * @param self The blake3_hasher instance to be initialized.
+ * @param context The context used to derive the key.
+ */
 void blake3_hasher_init_derive_key(blake3_hasher *self, const char *context) {
     blake3_hasher context_hasher;
     hasher_init_internal(&context_hasher, IV, DERIVE_KEY_CONTEXT);
@@ -277,6 +403,12 @@ void blake3_hasher_init_derive_key(blake3_hasher *self, const char *context) {
     hasher_init_internal(self, context_key_words, DERIVE_KEY_MATERIAL);
 }
 
+/**
+ * Pushes a copy of the current chaining value onto the top of the CV stack.
+ *
+ * @param self The BLAKE3 hasher object.
+ * @param cv The current chaining value to be pushed onto the stack.
+ */
 inline static void hasher_push_stack(
     blake3_hasher *self, const uint32_t cv[8]) {
     memcpy(&self->cv_stack[(size_t)self->cv_stack_len * 8], cv, 8 * 4);
@@ -284,12 +416,32 @@ inline static void hasher_push_stack(
 }
 
 // Returns a pointer to the popped CV, which is valid until the next push.
+/**
+ * Decreases the length of the CV stack by one and returns a pointer to the new
+ * top of the stack.
+ *
+ * @param self The blake3_hasher object.
+ * @return A pointer to the new top of the CV stack.
+ */
 inline static const uint32_t *hasher_pop_stack(blake3_hasher *self) {
     self->cv_stack_len--;
     return &self->cv_stack[(size_t)self->cv_stack_len * 8];
 }
 
 // Section 5.1.2 of the BLAKE3 spec explains this algorithm in more detail.
+/**
+ * Adds a chunk to the BLAKE3 hasher and updates the CV stack.
+ * For each completed subtree, its left child will be the current top entry in
+ * the CV stack, and its right child will be the current value of `new_cv`. Pop
+ * each left child off the stack, merge it with `new_cv`, and overwrite `new_cv`
+ * with the result. After all these merges, push the final value of `new_cv`
+ * onto the stack. The number of completed subtrees is given by the number of
+ * trailing 0-bits in the new total number of chunks.
+ *
+ * @param self The BLAKE3 hasher instance.
+ * @param new_cv The new CV to add to the hasher.
+ * @param total_chunks The total number of chunks.
+ */
 inline static void hasher_add_chunk_cv(
     blake3_hasher *self, uint32_t new_cv[8], uint64_t total_chunks) {
     // This chunk might complete some subtrees. For each completed subtree, its
@@ -308,6 +460,13 @@ inline static void hasher_add_chunk_cv(
 }
 
 // Add input to the hash state. This can be called any number of times.
+/**
+ * blake3_hasher_update updates the hash state with the given input data.
+ *
+ * @param self The blake3_hasher object to update.
+ * @param input A pointer to the input data.
+ * @param input_len The length of the input data.
+ */
 void blake3_hasher_update(
     blake3_hasher *self, const void *input, size_t input_len) {
     const uint8_t *input_u8 = (const uint8_t *)input;
@@ -335,6 +494,13 @@ void blake3_hasher_update(
 }
 
 // Finalize the hash and write any number of output bytes.
+/**
+ * Finalizes the hashing process and computes the root output.
+ *
+ * @param self The blake3_hasher object.
+ * @param out The output buffer.
+ * @param out_len The length of the output buffer.
+ */
 void blake3_hasher_finalize(
     const blake3_hasher *self, void *out, size_t out_len) {
     // Starting with the output from the current chunk, compute all the parent
@@ -353,6 +519,15 @@ void blake3_hasher_finalize(
     output_root_bytes(&current_output, out, out_len);
 }
 
+/**
+ * Computes the BLAKE3 hash of the input stream and prints it as hexadecimal.
+ *
+ * @param has_key       A boolean indicating whether a key is provided.
+ * @param key           A pointer to the key.
+ * @param derive_key_context A pointer to the context for key derivation.
+ * @param output_len    The length of the output hash in bytes.
+ * @param input_stream  A pointer to the input stream.
+ */
 void blake3(bool has_key, uint8_t *key, const char *derive_key_context,
     size_t output_len, FILE *input_stream) {
     // check if file is opened correctly
