@@ -509,6 +509,54 @@ void blake3_hasher_finalize(
 }
 
 /**
+ * Computes the BLAKE3 hash of the input stream recursively and prints it as
+ * hexadecimal.
+ *
+ * @param has_key       A boolean indicating whether a key is provided.
+ * @param key           A pointer to the key.
+ * @param derive_key_context A pointer to the context for key derivation.
+ * @param output_len    The length of the output hash in bytes.
+ * @param input_stream  A pointer to the input stream.
+ */
+void blake3_rec(bool has_key, uint8_t *key, const char *derive_key_context,
+    size_t output_len, FILE *input_stream, uint8_t *output) {
+    // check if file is opened correctly
+    printf("\n[INFO]: Running the recursive version of BLAKE3\n");
+    if (input_stream == NULL) {
+        printf("\n[ERROR:] Could not open file\n");
+        exit(1);
+    }
+
+    // Initialize the hasher.
+    blake3_hasher hasher;
+    if (has_key) {
+        blake3_hasher_init_keyed(&hasher, key);
+    } else if (derive_key_context != NULL) {
+        blake3_hasher_init_derive_key(&hasher, derive_key_context);
+    } else {
+        blake3_hasher_init(&hasher);
+    }
+
+    // Hash standard input until we reach EOF.
+    unsigned char buf[65536];
+    while (1) {
+        size_t n = fread(buf, 1, sizeof(buf), input_stream);
+        if (n == 0) { break; }  // EOF (or possibly an error)
+        recursive_blake3_hasher_update(&hasher, buf, n);
+    }
+
+    // Finalize the hash.
+
+    assert(output != NULL);
+    blake3_hasher_finalize(&hasher, output, output_len);
+
+    // Print the hash as hexadecimal.
+    // for (size_t i = 0; i < output_len; i++) printf("%02x", output[i]);
+    printf("\n");
+    // free(output);
+}
+
+/**
  * Computes the BLAKE3 hash of the input stream and prints it as hexadecimal.
  *
  * @param has_key       A boolean indicating whether a key is provided.
@@ -556,11 +604,12 @@ void blake3(bool has_key, uint8_t *key, const char *derive_key_context,
 
 void test_blake3(bool has_key, uint8_t *key, const char *derive_key_context,
     size_t output_len, FILE *input_stream, uint8_t *output) {
-    blake3(has_key, key, derive_key_context, output_len, input_stream, output);
+    blake3_rec(
+        has_key, key, derive_key_context, output_len, input_stream, output);
 }
-/*
+
 // Recursive function to hash data using BLAKE3
-void recursive_blake3_hash(
+void recursive_blake3_hasher_update(
     blake3_hasher *self, const uint8_t *input, size_t input_len) {
     if (input_len <= SMALL_BLOCK_SIZE) {
         // Process the data and update the hasher for small blocks
@@ -578,11 +627,9 @@ void recursive_blake3_hash(
         blake3_hasher_init(&right_hasher);
 
         // Recursively process the left and right halves
-        recursive_blake3_hash(&left_hasher, left_half, half_len);
-        recursive_blake3_hash(&right_hasher, right_half, input_len - half_len);
-
-        // Merge the results if necessary
-        // ...
+        recursive_blake3_hasher_update(&left_hasher, left_half, half_len);
+        recursive_blake3_hasher_update(
+            &right_hasher, right_half, input_len - half_len);
 
         // Finalize the left and right hashes
         uint8_t left_hash[BLAKE3_OUT_LEN];
@@ -590,40 +637,15 @@ void recursive_blake3_hash(
         blake3_hasher_finalize(&left_hasher, left_hash, BLAKE3_OUT_LEN);
         blake3_hasher_finalize(&right_hasher, right_hash, BLAKE3_OUT_LEN);
 
-        // Combine left and right hashes (if needed)
-        // ...
+        // Merge the results if necessary
+        uint8_t       combined_hash[BLAKE3_OUT_LEN];
+        blake3_hasher combined_hasher;
+        blake3_hasher_init(&combined_hasher);
+        blake3_hasher_update(&combined_hasher, left_hash, BLAKE3_OUT_LEN);
+        blake3_hasher_update(&combined_hasher, right_hash, BLAKE3_OUT_LEN);
+        blake3_hasher_finalize(&combined_hasher, combined_hash, BLAKE3_OUT_LEN);
 
         // Update the parent hasher with the combined hash
         blake3_hasher_update(self, combined_hash, BLAKE3_OUT_LEN);
     }
 }
-
-// Modified blake3_hasher_update to call the recursive function
-void blake3_hasher_update_rec(
-    blake3_hasher *self, const void *input, size_t input_len) {
-    const uint8_t *input_u8 = (const uint8_t *)input;
-
-    // If the current chunk is complete, finalize it and reset the chunk state
-    if (chunk_state_len(&self->chunk_state) == BLAKE3_CHUNK_LEN) {
-        output   chunk_output = chunk_state_output(&self->chunk_state);
-        uint32_t chunk_cv[8];
-        output_chaining_value(&chunk_output, chunk_cv);
-        uint64_t total_chunks = self->chunk_state.chunk_counter + 1;
-        hasher_add_chunk_cv(self, chunk_cv, total_chunks);
-        chunk_state_init(
-            &self->chunk_state, self->key_words, total_chunks, self->flags);
-    }
-
-    // Compress input bytes into the current chunk state.
-    size_t want = BLAKE3_CHUNK_LEN - chunk_state_len(&self->chunk_state);
-    size_t take = want;
-    if (input_len < want) { take = input_len; }
-
-    chunk_state_update(&self->chunk_state, input_u8, take);
-    input_u8 += take;
-    input_len -= take;
-
-    // Recursively process the remaining data
-    if (input_len > 0) { recursive_blake3_hash(self, input_u8, input_len); }
-}
-*/

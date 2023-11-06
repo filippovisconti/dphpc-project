@@ -30,7 +30,7 @@ int main(void) {
     }
     system("clear");
     uint8_t *output = malloc(output_len);
-    printf("************** BLAKE3 STOUT **************\n          ");
+    printf("************** BLAKE3 STOUT **************\n");
     test_blake3(has_key, key, derive_key_context, output_len, input, output);
 
     char *output_hex = malloc(output_len * 2 + 1);

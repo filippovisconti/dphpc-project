@@ -59,13 +59,15 @@ void blake3_hasher_finalize(
 
 void blake3(bool has_key, uint8_t *key, const char *derive_key_context,
     size_t output_len, FILE *input_stream, uint8_t *output);
+void blake3_rec(bool has_key, uint8_t *key, const char *derive_key_context,
+    size_t output_len, FILE *input_stream, uint8_t *output);
 
 void test_blake3(bool has_key, uint8_t *key, const char *derive_key_context,
     size_t output_len, FILE *input_stream, uint8_t *output);
 
-void recursive_blake3_hash(
+void recursive_blake3_hasher_update(
     blake3_hasher *self, const uint8_t *input, size_t input_len);
 
-void blake3_hasher_update_rec(
-    blake3_hasher *self, const void *input, size_t input_len);
+// void blake3_hasher_update_rec(
+//     blake3_hasher *self, const void *input, size_t input_len);
 #endif  // _BLAKE3_REFERENCE_IMPL_H
