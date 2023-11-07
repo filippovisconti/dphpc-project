@@ -5,7 +5,7 @@ UseTabs: Always
 IncludeBlocks: Regroup
 MaxEmptyLinesToKeep: 1
 NamespaceIndentation: All
-ColumnLimit: 80
+ColumnLimit: 100
 PenaltyBreakAssignment: 2
 PenaltyReturnTypeOnItsOwnLine: 200
 PointerAlignment: Left
@@ -16,7 +16,7 @@ AllowShortCaseLabelsOnASingleLine: true
 AllowShortFunctionsOnASingleLine: InlineOnly
 AllowShortIfStatementsOnASingleLine: AllIfsAndElse
 AllowShortLoopsOnASingleLine: true
-KeepEmptyLinesAtTheStartOfBlocks: false
+KeepEmptyLinesAtTheStartOfBlocks: true
 SortIncludes: true
 AlignArrayOfStructures: Right
 AlignConsecutiveAssignments: Consecutive

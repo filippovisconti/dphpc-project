@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "omp.h"
 #include "reference_impl.h"
 
 static uint32_t IV[8] = {
@@ -17,8 +18,7 @@ static uint32_t IV[8] = {
     0x5BE0CD19,
 };
 
-static size_t MSG_PERMUTATION[16] = {
-    2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8};
+static size_t MSG_PERMUTATION[16] = {2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8};
 
 /**
  * Rotates the bits of a 32-bit unsigned integer to the right by a given number
@@ -45,8 +45,8 @@ inline static uint32_t rotate_right(uint32_t x, int n) {
  * @param mx The first message word to use in the function.
  * @param my The second message word to use in the function.
  */
-inline static void g(uint32_t state[16], size_t a, size_t b, size_t c, size_t d,
-    uint32_t mx, uint32_t my) {
+inline static void g(
+    uint32_t state[16], size_t a, size_t b, size_t c, size_t d, uint32_t mx, uint32_t my) {
     state[a] = state[a] + state[b] + mx;
     state[d] = rotate_right(state[d] ^ state[a], 16);
     state[c] = state[c] + state[d];
@@ -91,9 +91,8 @@ inline static void permute(uint32_t m[16]) {
  * @param flags The current flag value.
  * @param out The resulting hash value.
  */
-inline static void compress(const uint32_t chaining_value[8],
-    const uint32_t block_words[16], uint64_t counter, uint32_t block_len,
-    uint32_t flags, uint32_t out[16]) {
+inline static void compress(const uint32_t chaining_value[8], const uint32_t block_words[16],
+    uint64_t counter, uint32_t block_len, uint32_t flags, uint32_t out[16]) {
     uint32_t state[16] = {
         chaining_value[0],
         chaining_value[1],
@@ -164,8 +163,8 @@ inline static void words_from_little_endian_bytes(
  */
 inline static void output_chaining_value(const output *self, uint32_t out[8]) {
     uint32_t out16[16];
-    compress(self->input_chaining_value, self->block_words, self->counter,
-        self->block_len, self->flags, out16);
+    compress(self->input_chaining_value, self->block_words, self->counter, self->block_len,
+        self->flags, out16);
     memcpy(out, out16, 8 * 4);
 }
 
@@ -176,15 +175,14 @@ inline static void output_chaining_value(const output *self, uint32_t out[8]) {
  * @param out The output buffer.
  * @param out_len The length of the output buffer.
  */
-inline static void output_root_bytes(
-    const output *self, void *out, size_t out_len) {
+inline static void output_root_bytes(const output *self, void *out, size_t out_len) {
     uint8_t *out_u8               = (uint8_t *)out;
     uint64_t output_block_counter = 0;
 
     while (out_len > 0) {
         uint32_t words[16];
-        compress(self->input_chaining_value, self->block_words,
-            output_block_counter, self->block_len, self->flags | ROOT, words);
+        compress(self->input_chaining_value, self->block_words, output_block_counter,
+            self->block_len, self->flags | ROOT, words);
         for (size_t word = 0; word < 16; word++) {
             for (int byte = 0; byte < 4; byte++) {
                 if (out_len == 0) { return; }
@@ -206,8 +204,8 @@ inline static void output_root_bytes(
  * @param chunk_counter The counter for the current chunk.
  * @param flags Flags for the chunk state.
  */
-inline static void chunk_state_init(_blake3_chunk_state *self,
-    const uint32_t key_words[8], uint64_t chunk_counter, uint32_t flags) {
+inline static void chunk_state_init(_blake3_chunk_state *self, const uint32_t key_words[8],
+    uint64_t chunk_counter, uint32_t flags) {
     memcpy(self->chaining_value, key_words, sizeof(self->chaining_value));
     self->chunk_counter = chunk_counter;
     memset(self->block, 0, sizeof(self->block));
@@ -223,8 +221,7 @@ inline static void chunk_state_init(_blake3_chunk_state *self,
  * @return The total length of the chunk state in bytes.
  */
 inline static size_t chunk_state_len(const _blake3_chunk_state *self) {
-    return BLAKE3_BLOCK_LEN * (size_t)self->blocks_compressed +
-           (size_t)self->block_len;
+    return BLAKE3_BLOCK_LEN * (size_t)self->blocks_compressed + (size_t)self->block_len;
 }
 
 /**
@@ -260,13 +257,18 @@ inline static void chunk_state_update(
         // If the block buffer is full, compress it and clear it. More input is
         // coming, so this compression is not CHUNK_END.
         if (self->block_len == BLAKE3_BLOCK_LEN) {
+            // init an array of 16 32-bit words
             uint32_t block_words[16];
-            words_from_little_endian_bytes(
-                self->block, BLAKE3_BLOCK_LEN, block_words);
+
+            // convert the block buffer to an array of 16 32-bit words
+            words_from_little_endian_bytes(self->block, BLAKE3_BLOCK_LEN, block_words);
+
+            // init an array of 16 32-bit words to store the output
             uint32_t out16[16];
-            compress(self->chaining_value, block_words, self->chunk_counter,
-                BLAKE3_BLOCK_LEN, self->flags | chunk_state_start_flag(self),
-                out16);
+
+            // run the compress function with
+            compress(self->chaining_value, block_words, self->chunk_counter, BLAKE3_BLOCK_LEN,
+                self->flags | chunk_state_start_flag(self), out16);
             memcpy(self->chaining_value, out16, sizeof(self->chaining_value));
             self->blocks_compressed++;
             memset(self->block, 0, sizeof(self->block));
@@ -294,10 +296,8 @@ inline static void chunk_state_update(
  */
 inline static output chunk_state_output(const _blake3_chunk_state *self) {
     output ret;
-    memcpy(ret.input_chaining_value, self->chaining_value,
-        sizeof(ret.input_chaining_value));
-    words_from_little_endian_bytes(
-        self->block, sizeof(self->block), ret.block_words);
+    memcpy(ret.input_chaining_value, self->chaining_value, sizeof(ret.input_chaining_value));
+    words_from_little_endian_bytes(self->block, sizeof(self->block), ret.block_words);
     ret.counter   = self->chunk_counter;
     ret.block_len = (uint32_t)self->block_len;
     ret.flags     = self->flags | chunk_state_start_flag(self) | CHUNK_END;
@@ -315,23 +315,19 @@ inline static output chunk_state_output(const _blake3_chunk_state *self) {
  * @return The parent output.
  */
 inline static output parent_output(const uint32_t left_child_cv[8],
-    const uint32_t right_child_cv[8], const uint32_t key_words[8],
-    uint32_t flags) {
+    const uint32_t right_child_cv[8], const uint32_t key_words[8], uint32_t flags) {
     output ret;
-    memcpy(
-        ret.input_chaining_value, key_words, sizeof(ret.input_chaining_value));
+    memcpy(ret.input_chaining_value, key_words, sizeof(ret.input_chaining_value));
     memcpy(&ret.block_words[0], left_child_cv, 8 * 4);
     memcpy(&ret.block_words[8], right_child_cv, 8 * 4);
-    ret.counter = 0;  // Always 0 for parent nodes.
-    ret.block_len =
-        BLAKE3_BLOCK_LEN;  // Always BLAKE3_BLOCK_LEN (64) for parent nodes.
-    ret.flags = PARENT | flags;
+    ret.counter   = 0;                 // Always 0 for parent nodes.
+    ret.block_len = BLAKE3_BLOCK_LEN;  // Always BLAKE3_BLOCK_LEN (64) for parent nodes.
+    ret.flags     = PARENT | flags;
     return ret;
 }
 
-inline static void parent_cv(const uint32_t left_child_cv[8],
-    const uint32_t right_child_cv[8], const uint32_t key_words[8],
-    uint32_t flags, uint32_t out[8]) {
+inline static void parent_cv(const uint32_t left_child_cv[8], const uint32_t right_child_cv[8],
+    const uint32_t key_words[8], uint32_t flags, uint32_t out[8]) {
     output o = parent_output(left_child_cv, right_child_cv, key_words, flags);
     // We only write to `out` after we've read the inputs. That makes it safe
     // for `out` to alias an input, which we do below.
@@ -364,8 +360,7 @@ void blake3_hasher_init(blake3_hasher *self) {
  * @param self The Blake3 hasher to be initialized.
  * @param key The key to be used for the initialization.
  */
-void blake3_hasher_init_keyed(
-    blake3_hasher *self, const uint8_t key[BLAKE3_KEY_LEN]) {
+void blake3_hasher_init_keyed(blake3_hasher *self, const uint8_t key[BLAKE3_KEY_LEN]) {
     uint32_t key_words[8];
     words_from_little_endian_bytes(key, BLAKE3_KEY_LEN, key_words);
     hasher_init_internal(self, key_words, KEYED_HASH);
@@ -387,8 +382,7 @@ void blake3_hasher_init_derive_key(blake3_hasher *self, const char *context) {
     uint8_t context_key[BLAKE3_KEY_LEN];
     blake3_hasher_finalize(&context_hasher, context_key, BLAKE3_KEY_LEN);
     uint32_t context_key_words[8];
-    words_from_little_endian_bytes(
-        context_key, BLAKE3_KEY_LEN, context_key_words);
+    words_from_little_endian_bytes(context_key, BLAKE3_KEY_LEN, context_key_words);
     hasher_init_internal(self, context_key_words, DERIVE_KEY_MATERIAL);
 }
 
@@ -398,8 +392,7 @@ void blake3_hasher_init_derive_key(blake3_hasher *self, const char *context) {
  * @param self The BLAKE3 hasher object.
  * @param cv The current chaining value to be pushed onto the stack.
  */
-inline static void hasher_push_stack(
-    blake3_hasher *self, const uint32_t cv[8]) {
+inline static void hasher_push_stack(blake3_hasher *self, const uint32_t cv[8]) {
     memcpy(&self->cv_stack[(size_t)self->cv_stack_len * 8], cv, 8 * 4);
     self->cv_stack_len++;
 }
@@ -441,8 +434,7 @@ inline static void hasher_add_chunk_cv(
     // The number of completed subtrees is given by the number of trailing
     // 0-bits in the new total number of chunks.
     while ((total_chunks & 1) == 0) {
-        parent_cv(hasher_pop_stack(self), new_cv, self->key_words, self->flags,
-            new_cv);
+        parent_cv(hasher_pop_stack(self), new_cv, self->key_words, self->flags, new_cv);
         total_chunks >>= 1;
     }
     hasher_push_stack(self, new_cv);
@@ -456,8 +448,7 @@ inline static void hasher_add_chunk_cv(
  * @param input A pointer to the input data.
  * @param input_len The length of the input data.
  */
-void blake3_hasher_update(
-    blake3_hasher *self, const void *input, size_t input_len) {
+void blake3_hasher_update(blake3_hasher *self, const void *input, size_t input_len) {
     const uint8_t *input_u8 = (const uint8_t *)input;
     while (input_len > 0) {
         // If the current chunk is complete, finalize it and reset the chunk
@@ -468,8 +459,7 @@ void blake3_hasher_update(
             output_chaining_value(&chunk_output, chunk_cv);
             uint64_t total_chunks = self->chunk_state.chunk_counter + 1;
             hasher_add_chunk_cv(self, chunk_cv, total_chunks);
-            chunk_state_init(
-                &self->chunk_state, self->key_words, total_chunks, self->flags);
+            chunk_state_init(&self->chunk_state, self->key_words, total_chunks, self->flags);
         }
 
         // Compress input bytes into the current chunk state.
@@ -490,8 +480,7 @@ void blake3_hasher_update(
  * @param out The output buffer.
  * @param out_len The length of the output buffer.
  */
-void blake3_hasher_finalize(
-    const blake3_hasher *self, void *out, size_t out_len) {
+void blake3_hasher_finalize(const blake3_hasher *self, void *out, size_t out_len) {
     // Starting with the output from the current chunk, compute all the parent
     // chaining values along the right edge of the tree, until we have the root
     // output.
@@ -501,11 +490,61 @@ void blake3_hasher_finalize(
         parent_nodes_remaining--;
         uint32_t current_cv[8];
         output_chaining_value(&current_output, current_cv);
-        current_output =
-            parent_output(&self->cv_stack[parent_nodes_remaining * 8],
-                current_cv, self->key_words, self->flags);
+        current_output = parent_output(
+            &self->cv_stack[parent_nodes_remaining * 8], current_cv, self->key_words, self->flags);
     }
     output_root_bytes(&current_output, out, out_len);
+}
+
+/**
+ * Computes the BLAKE3 hash of the input stream and prints it as hexadecimal.
+ *
+ * @param has_key       A boolean indicating whether a key is provided.
+ * @param key           A pointer to the key.
+ * @param derive_key_context A pointer to the context for key derivation.
+ * @param output_len    The length of the output hash in bytes.
+ * @param input_stream  A pointer to the input stream.
+ */
+void blake3(bool has_key, uint8_t *key, const char *derive_key_context, size_t output_len,
+    FILE *input_stream, uint8_t *output) {
+    // check if file is opened correctly
+    if (input_stream == NULL) {
+        printf("\n[ERROR:] Could not open file\n");
+        exit(1);
+    }
+
+    // Initialize the hasher.
+    blake3_hasher hasher;
+    if (has_key) {
+        blake3_hasher_init_keyed(&hasher, key);
+    } else if (derive_key_context != NULL) {
+        blake3_hasher_init_derive_key(&hasher, derive_key_context);
+    } else {
+        blake3_hasher_init(&hasher);
+    }
+
+    // Hash standard input until we reach EOF.
+    unsigned char buf[65536];
+    while (1) {
+        size_t n = fread(buf, 1, sizeof(buf), input_stream);
+        if (n == 0) { break; }  // EOF (or possibly an error)
+        blake3_hasher_update(&hasher, buf, n);
+    }
+
+    // Finalize the hash.
+
+    assert(output != NULL);
+    blake3_hasher_finalize(&hasher, output, output_len);
+
+    // Print the hash as hexadecimal.
+    for (size_t i = 0; i < output_len; i++) printf("%02x", output[i]);
+    printf("\n");
+    // free(output);
+}
+
+void test_blake3(bool has_key, uint8_t *key, const char *derive_key_context, size_t output_len,
+    FILE *input_stream, uint8_t *output) {
+    blake3(has_key, key, derive_key_context, output_len, input_stream, output);
 }
 
 /**
@@ -518,8 +557,8 @@ void blake3_hasher_finalize(
  * @param output_len    The length of the output hash in bytes.
  * @param input_stream  A pointer to the input stream.
  */
-void blake3_rec(bool has_key, uint8_t *key, const char *derive_key_context,
-    size_t output_len, FILE *input_stream, uint8_t *output) {
+void blake3_rec(bool has_key, uint8_t *key, const char *derive_key_context, size_t output_len,
+    FILE *input_stream, uint8_t *output) {
     // check if file is opened correctly
     printf("\n[INFO]: Running the recursive version of BLAKE3\n");
     if (input_stream == NULL) {
@@ -556,96 +595,43 @@ void blake3_rec(bool has_key, uint8_t *key, const char *derive_key_context,
     // free(output);
 }
 
-/**
- * Computes the BLAKE3 hash of the input stream and prints it as hexadecimal.
- *
- * @param has_key       A boolean indicating whether a key is provided.
- * @param key           A pointer to the key.
- * @param derive_key_context A pointer to the context for key derivation.
- * @param output_len    The length of the output hash in bytes.
- * @param input_stream  A pointer to the input stream.
- */
-void blake3(bool has_key, uint8_t *key, const char *derive_key_context,
-    size_t output_len, FILE *input_stream, uint8_t *output) {
-    // check if file is opened correctly
-    if (input_stream == NULL) {
-        printf("\n[ERROR:] Could not open file\n");
-        exit(1);
-    }
-
-    // Initialize the hasher.
-    blake3_hasher hasher;
-    if (has_key) {
-        blake3_hasher_init_keyed(&hasher, key);
-    } else if (derive_key_context != NULL) {
-        blake3_hasher_init_derive_key(&hasher, derive_key_context);
-    } else {
-        blake3_hasher_init(&hasher);
-    }
-
-    // Hash standard input until we reach EOF.
-    unsigned char buf[65536];
-    while (1) {
-        size_t n = fread(buf, 1, sizeof(buf), input_stream);
-        if (n == 0) { break; }  // EOF (or possibly an error)
-        blake3_hasher_update(&hasher, buf, n);
-    }
-
-    // Finalize the hash.
-
-    assert(output != NULL);
-    blake3_hasher_finalize(&hasher, output, output_len);
-
-    // Print the hash as hexadecimal.
-    for (size_t i = 0; i < output_len; i++) printf("%02x", output[i]);
-    printf("\n");
-    // free(output);
-}
-
-void test_blake3(bool has_key, uint8_t *key, const char *derive_key_context,
-    size_t output_len, FILE *input_stream, uint8_t *output) {
-    blake3_rec(
-        has_key, key, derive_key_context, output_len, input_stream, output);
-}
-
 // Recursive function to hash data using BLAKE3
-void recursive_blake3_hasher_update(
-    blake3_hasher *self, const uint8_t *input, size_t input_len) {
-    if (input_len <= SMALL_BLOCK_SIZE) {
-        // Process the data and update the hasher for small blocks
-        blake3_hasher_update(self, input, input_len);
-    } else {
-        // Divide the input into two halves
-        size_t         half_len   = input_len / 2;
-        const uint8_t *left_half  = input;
-        const uint8_t *right_half = input + half_len;
+void parallel_blake3_hasher_update(blake3_hasher *self, const uint8_t *input, size_t input_len) {
+    const uint8_t *input_u8     = (const uint8_t *)input;
+    uint64_t       total_chunks = self->chunk_state.chunk_counter;
 
-        // Create BLAKE3 hashers for the left and right halves
-        blake3_hasher left_hasher;
-        blake3_hasher right_hasher;
-        blake3_hasher_init(&left_hasher);
-        blake3_hasher_init(&right_hasher);
+#pragma omp parallel
+    {
+        uint8_t local_block[BLAKE3_CHUNK_LEN];  // Local buffer for each thread
+        size_t  local_input_len = 0;            // Amount of data processed by this thread
 
-        // Recursively process the left and right halves
-        recursive_blake3_hasher_update(&left_hasher, left_half, half_len);
-        recursive_blake3_hasher_update(
-            &right_hasher, right_half, input_len - half_len);
+#pragma omp for
+        for (size_t i = 0; i < input_len; i++) {
+            local_block[local_input_len++] = input_u8[i];
+            if (local_input_len == BLAKE3_CHUNK_LEN) {
+                // If the local chunk is complete, finalize it
+                output   local_chunk_output;
+                uint32_t local_chunk_cv[8];
+                chunk_state_init(&self->chunk_state, self->key_words, total_chunks, self->flags);
+                chunk_state_update(&self->chunk_state, local_block, BLAKE3_CHUNK_LEN);
+                chunk_state_finalize(&self->chunk_state, &local_chunk_output);
+                output_chaining_value(&local_chunk_output, local_chunk_cv);
 
-        // Finalize the left and right hashes
-        uint8_t left_hash[BLAKE3_OUT_LEN];
-        uint8_t right_hash[BLAKE3_OUT_LEN];
-        blake3_hasher_finalize(&left_hasher, left_hash, BLAKE3_OUT_LEN);
-        blake3_hasher_finalize(&right_hasher, right_hash, BLAKE3_OUT_LEN);
+// Synchronize threads to avoid race conditions
+#pragma omp critical
+                {
+                    // Merge the local chunk's chaining value with the global
+                    // chaining value
+                    total_chunks = ++self->chunk_state.chunk_counter;
+                    hasher_add_chunk_cv(self, local_chunk_cv, total_chunks);
+                }
+                local_input_len = 0;  // Reset the local input buffer
+            }
+        }
 
-        // Merge the results if necessary
-        uint8_t       combined_hash[BLAKE3_OUT_LEN];
-        blake3_hasher combined_hasher;
-        blake3_hasher_init(&combined_hasher);
-        blake3_hasher_update(&combined_hasher, left_hash, BLAKE3_OUT_LEN);
-        blake3_hasher_update(&combined_hasher, right_hash, BLAKE3_OUT_LEN);
-        blake3_hasher_finalize(&combined_hasher, combined_hash, BLAKE3_OUT_LEN);
-
-        // Update the parent hasher with the combined hash
-        blake3_hasher_update(self, combined_hash, BLAKE3_OUT_LEN);
+        // Handle any remaining data in the local buffer
+        if (local_input_len > 0) {
+            chunk_state_update(&self->chunk_state, local_block, local_input_len);
+        }
     }
 }

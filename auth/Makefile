@@ -27,7 +27,7 @@ debug:
 	$(CC) $(FLAGS) -g -o main_arm $(FILES) $(INCLUDES)
 	
 clean:
-	@rm -fR main_arm blake3 main_arm.dSYM/ test
+	@rm -fR main_arm blake3 main_arm.dSYM/ test test.dSYM/
 
 else
 CC := gcc
