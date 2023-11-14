@@ -1,7 +1,6 @@
 BasedOnStyle: Google
-IndentWidth: 4
-TabWidth: 4
-UseTabs: Always
+IndentWidth: 2
+TabWidth: 2
 IncludeBlocks: Regroup
 MaxEmptyLinesToKeep: 1
 NamespaceIndentation: All
@@ -24,6 +23,5 @@ AlignConsecutiveMacros: AcrossEmptyLines
 AlignConsecutiveDeclarations: Consecutive
 AlignEscapedNewlines: Right
 AlignOperands: Align
-TrailingCommentsAlignmentKinds: Always
 InsertNewlineAtEOF: true
 LineEnding: LF

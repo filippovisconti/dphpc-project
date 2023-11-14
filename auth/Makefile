@@ -13,8 +13,8 @@ test: clean
 	@$(CC) $(FLAGS) -ggdb -o test blake.c quick_test.c $(INCLUDES)
 	@./test
 
-blake:
-	$(CC) $(FLAGS) -o blake3 blake.c main.c $(INCLUDES)
+blake: clean
+	$(CC) $(FLAGS) -g -o blake myblake.c $(INCLUDES)
 
 run: compile 
 	./main_arm
@@ -27,7 +27,7 @@ debug:
 	$(CC) $(FLAGS) -g -o main_arm $(FILES) $(INCLUDES)
 	
 clean:
-	@rm -fR main_arm blake3 main_arm.dSYM/ test test.dSYM/
+	@rm -fR main_arm blake main_arm.dSYM/ test test.dSYM/
 
 else
 CC := gcc
@@ -42,7 +42,7 @@ INCLUDES := -I${CPATH} -I include -L${LD_LIBRARY_PATH} -lm
 
 
 blake:
-	$(CC) $(FLAGS) -o blake3 blake.c main.c $(INCLUDES)
+	$(CC) $(FLAGS) -o blake myblake.c $(INCLUDES)
 print:
 	python3 ${PAPI_ROOT}/bin/papi_hl_output_writer.py --source measurements/papi_hl_output --notation=derived --type=summary > papi.log
 	
