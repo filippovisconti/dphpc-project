@@ -1,12 +1,30 @@
 #include <assert.h>
 #include <math.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "omp.h"
-#include "reference_impl.h"
+
+#define CHUNK_START         1 << 0
+#define CHUNK_END           1 << 1
+#define PARENT              1 << 2
+#define ROOT                1 << 3
+#define KEYED_HASH          1 << 4
+#define DERIVE_KEY_CONTEXT  1 << 5
+#define DERIVE_KEY_MATERIAL 1 << 6
+#define BLAKE3_OUT_LEN      32
+#define BLAKE3_KEY_LEN      32
+#define BLAKE3_BLOCK_LEN    64
+#define BLAKE3_CHUNK_LEN    1024
+#define SMALL_BLOCK_SIZE    1024
+
+#define CHUNK_SIZE          1024
+#define CHUNK_SIZE_LOG      10
+#define CEIL_DIV(x, y)      ((int)ceil((double)(x) / (y)))
 
 uint32_t IV[8] = {
     0x6A09E667,
@@ -98,6 +116,7 @@ inline void permute(uint32_t m[16]) {
  */
 inline void compress(const uint32_t chaining_value[8], const uint32_t block_words[16],
     uint64_t counter, uint32_t block_len, uint32_t flags, uint32_t out[16]) {
+    (void)block_len;
     uint32_t state[16] = {
         chaining_value[0],
         chaining_value[1],
@@ -171,14 +190,15 @@ int main(void) {
     fseek(input, 0L, SEEK_END);
     size_t num_chunks = ftell(input) >> CHUNK_SIZE_LOG;  // / 1024
     fclose(input);
+    size_t  output_len = 128;
+    uint8_t output[output_len];
 
-    int num_threads = 8;
+    size_t num_threads = 8;
     // TODO prova ad approssimare per eccesso
-    // TODO FIX logaritmo
-    int level          = (int)log2(num_threads);
-    int max_depth      = (int)ceil(log2(num_chunks));
-    int sub_tree_depth = max_depth - level;
-    int num_leaves     = (int)sub_tree_depth << 1;  // 2^sub_tree_depth
+    size_t   level     = (int)log2(num_threads);  // tree depth in which we have one node per thread
+    size_t   max_depth = (int)ceil(log2(num_chunks));  // maximum depth of the tree
+    uint64_t sub_tree_depth = max_depth - level;       // depth of each thread's subtree
+    uint64_t num_leaves     = 1 << sub_tree_depth;     // 2^sub_tree_depth
 
     for (size_t t = 0; t < num_threads; t++) {
         int stride = t * num_leaves << CHUNK_SIZE_LOG;
@@ -190,25 +210,28 @@ int main(void) {
         char  *buffer = malloc(4 * CHUNK_SIZE);
         size_t len    = fread(buffer, 1, 4 * CHUNK_SIZE, thread_input);
 
-        if (len == 0) break;  // EOF
+        if ((len == 0) || (len >= (num_leaves << CHUNK_SIZE_LOG))) break;  // EOF
 
-        int num_chunks = (int)ceil((double)len / CHUNK_SIZE);  // 1 <= num_chunks <= 4
+        // (int)ceil((double)len / CHUNK_SIZE);  // 1 <= num_chunks <= 4
+        int num_chunks = CEIL_DIV(len, CHUNK_SIZE);
         if (num_chunks > 4) exit(1);
 
-        for (size_t chunk = 0; chunk < num_chunks; chunk++) {
+        uint32_t chunk_chaining_values[num_chunks][16];
+        // START BASE CHUNK PROCESSING
+        for (int chunk = 0; chunk < num_chunks; chunk++) {
 
             // Each chunk of up to 1024 bytes is split into blocks of up to 64 bytes.
             int  num_blocks = 64;
             bool last_chunk = false;
             int  remainder  = (len - CHUNK_SIZE * (num_chunks - 1));  // 0 <= remainder <= 1024
             if (chunk == num_chunks - 1) {
-                num_blocks = (int)ceil((double)remainder / BLAKE3_BLOCK_LEN);
+                //(int)ceil((double)remainder / BLAKE3_BLOCK_LEN);
+                num_blocks = CEIL_DIV(remainder, BLAKE3_BLOCK_LEN);
                 last_chunk = true;
             }
 
             uint32_t chaining_value[16];
-
-            for (size_t block = 0; block < num_blocks; block++) {
+            for (int block = 0; block < num_blocks; block++) {
                 // The block length b is the number of input bytes in each block,
                 // i.e., 64 for all blocks except the last block of the last chunk,
                 // which may be short.
@@ -220,7 +243,7 @@ int main(void) {
 
                     // if (len % BLAKE3_BLOCK_LEN != 0)
                     // if remainder is not a multiple of 64, last block is not full
-                    if (remainder & (BLAKE3_BLOCK_LEN - 1) == 0) {
+                    if ((remainder & (BLAKE3_BLOCK_LEN - 1)) == 0) {
 
                         // calculate how many bytes are present
                         block_len = remainder % BLAKE3_BLOCK_LEN;
@@ -248,9 +271,10 @@ int main(void) {
                 // the last block of each chunk sets the CHUNK_END flag.
                 if (block == num_blocks - 1) flags |= CHUNK_END;
 
-                // The counter t for each block is the chunk index i.e., 0 for all blocks in the
-                // first chunk, 1 for all blocks in the second chunk, and so on.
-                int counter_t = chunk;
+                // The counter t for each block is the chunk index i.e.:
+                // 0 for all blocks in the first chunk,
+                // 1 for all blocks in the second chunk, and so on.
+                int counter_t = chunk;  // TODO: useless variable, currently
 
                 // If a chunk contains only one block, that block sets both CHUNK_START and
                 // CHUNK_END.
@@ -259,10 +283,10 @@ int main(void) {
                 // If a chunk is the root of its tree, the last block of that chunk also
                 // TODO: sets the ROOT flag.
 
-                // The input chaining value h0 ... h7 for the first block of each chunk is composed
-                // of the key words k0 ... k7, or in the base case it's the IV vector.
-                // The input chaining value for subsequent blocks is the output of the compression
-                // function for the previous block
+                // The input chaining value h0-h7 for the first block of each chunk is composed of
+                // the key words k0-k7, or in the base case it's the IV vector. The input chaining
+                // value for subsequent blocks is the output of the compression function for the
+                // previous block
                 const uint32_t *input_chaining_value = (block == 0 ? IV : chaining_value);
 
                 // The output of the truncated compression function for the last block in a chunk is
@@ -272,8 +296,107 @@ int main(void) {
                 // copy back the chaining value
                 memcpy(chaining_value, out16, sizeof(out16));
             }
-        }
-        fclose(thread_input);
 
-        return 0;
+            // chaining_value now contains the whole chunk's chaining value
+            // save for parent processing
+            memcpy(chunk_chaining_values[chunk], chaining_value, sizeof(chaining_value));
+        }
+        // END BASE CHUNK PROCESSING
+
+        // START PARENT PROCESSING
+        int             counter_t            = 0;       // always 0 for parent nodes
+        int             num_bytes            = 64;      // always 64
+        uint32_t        flags                = PARENT;  // set parent flag
+        const uint32_t *input_chaining_value = IV;      // input ch val is the keywords
+        uint32_t        message_words[16];  // first 8 is left child, second 8 is the right one;
+
+        int current_number_of_nodes = num_chunks;
+
+        uint32_t *buffer_a = malloc((current_number_of_nodes >> 1) << 5);
+        uint32_t *buffer_b = malloc((current_number_of_nodes >> 1) << 5);  // (num/2) * 4*8
+        uint8_t   a_or_b   = 0;
+
+        for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
+            memcpy(message_words, chunk_chaining_values[2 * i], 32);  // we want the first 32 bytes
+            memcpy(message_words + 8, chunk_chaining_values[2 * i + 1], 32);
+
+            uint32_t out16[16];
+            compress(input_chaining_value, message_words, counter_t, num_bytes, flags, out16);
+
+            memcpy(buffer_a + i, out16, sizeof(out16));
+        }
+        current_number_of_nodes >>= 1;
+
+        while (current_number_of_nodes > 1) {
+            uint32_t *buffer      = a_or_b ? buffer_a : buffer_b;
+            uint32_t *buffer_next = a_or_b ? buffer_b : buffer_a;
+            buffer_next           = realloc(buffer_next, (current_number_of_nodes >> 1) << 5);
+
+            if (current_number_of_nodes <= 2) flags |= ROOT;
+
+            for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
+                memcpy(message_words, buffer + 2 * i, 32);  // we want the first 32 bytes
+                memcpy(message_words + 8, buffer + 2 * i + 1, 32);
+
+                uint32_t out16[16];
+                compress(input_chaining_value, message_words, counter_t, num_bytes, flags, out16);
+
+                memcpy(buffer_next + i, out16, sizeof(out16));
+            }
+            current_number_of_nodes >>= 1;
+            a_or_b = !a_or_b;
+        }
+
+        assert(current_number_of_nodes == 1);
+
+        // Prepare output
+        a_or_b                   = !a_or_b;
+        uint32_t *result_buffer  = a_or_b ? buffer_b : buffer_a;
+        uint8_t  *running_output = output;
+
+        bool stop = false;
+        for (size_t word = 0; word < 16 && !stop; word++) {
+            for (int byte = 0; byte < 4; byte++) {
+                // output[word * 4 + byte] = (result_buffer[word] >> (8 * byte)) & 0xFF;
+                if (output_len == 0) {
+                    stop = true;
+                    break;
+                };
+
+                *running_output = (uint8_t)(result_buffer[word] >> (8 * byte));
+                running_output++;
+                output_len--;
+            }
+        }
+
+        while (output_len > 0) {
+            uint32_t words[16];
+            compress(input_chaining_value, message_words, ++counter_t, num_bytes, flags, words);
+            stop = false;
+
+            for (size_t word = 0; word < 16 && !stop; word++) {
+                for (int byte = 0; byte < 4; byte++) {
+                    // output[word * 4 + byte] = (words[word] >> (8 * byte)) & 0xFF;
+                    if (output_len == 0) {
+                        stop = true;
+                        break;
+                    };
+
+                    *running_output = (uint8_t)(words[word] >> (8 * byte));
+                    running_output++;
+                    output_len--;
+                }
+            }
+        }
+        printf("Output: ");
+        for (size_t i = 0; i < output_len; i++) printf("%02x", output[i]);
+        printf("\n");
+
+        // END PARRENT PROCESSING
+        free(buffer_a);
+        free(buffer_b);
+        fclose(thread_input);
     }
+
+    return 0;
+}
