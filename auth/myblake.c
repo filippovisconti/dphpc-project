@@ -281,11 +281,12 @@ int blake(char *filename) {
               }
             }
           }
-          int access_index = chunk * BLAKE3_CHUNK_LEN + block * BLAKE3_BLOCK_LEN;
 
           // Each block is parsed in little-endian order into message words m0... m15 and
           // compressed
           uint32_t output_blocks[16];
+          printf("chunck: %d, ", chunk);
+          int access_index = (chunk % 4) * BLAKE3_CHUNK_LEN + block * BLAKE3_BLOCK_LEN;
           words_from_little_endian_bytes(
               &read_buffer[access_index], BLAKE3_BLOCK_LEN, output_blocks);
 
@@ -299,8 +300,8 @@ int blake(char *filename) {
           // 1 for all blocks in the second chunk, and so on.
           int counter_t = chunk;  // TODO: useless variable, currently
 
-          // If a chunk contains only one block, that block sets both CHUNK_START and
-          // CHUNK_END.
+          // If a chunk contains only one block,
+          // that block sets both CHUNK_START and CHUNK_END.
           if (num_blocks == 1) assert(flags == (CHUNK_START | CHUNK_END));
 
           // If a chunk is the root of its tree, the last block of that chunk also
