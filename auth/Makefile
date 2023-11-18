@@ -10,11 +10,12 @@ ifeq ($(UNAME), arm64)
 CC := gcc-13
 
 test: clean
-	@$(CC) $(FLAGS) -ggdb -o test blake.c quick_test.c $(INCLUDES)
-	@./test
+	$(CC) $(FLAGS) -ggdb -o test blake.c quick_test.c $(INCLUDES)
+	./test
 
 blake: clean
-	$(CC) $(FLAGS) -g -o blake myblake.c $(INCLUDES)
+	@$(CC) $(FLAGS) -g -o blake myblake.c $(INCLUDES)
+	./blake
 
 run: compile 
 	./main_arm
@@ -27,7 +28,7 @@ debug:
 	$(CC) $(FLAGS) -g -o main_arm $(FILES) $(INCLUDES)
 	
 clean:
-	@rm -fR main_arm blake main_arm.dSYM/ test test.dSYM/
+	@rm -fR main_arm blake main_arm.dSYM/ test test.dSYM/ blake.dSYM
 
 else
 CC := gcc
