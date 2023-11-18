@@ -223,7 +223,7 @@ int blake(char *filename) {
       // reading 4 chunks of 1024 bytes each at a time
       char  *read_buffer = malloc(4 * CHUNK_SIZE);
       size_t len         = fread(read_buffer, 1, 4 * CHUNK_SIZE, thread_input);
-      printf("Read %zu bytes\n", len);
+      // printf("Read %zu bytes\n", len);
       if ((len == 0) || (len >= (num_leaves << CHUNK_SIZE_LOG))) {
         printf("finished\n");
         break;
@@ -237,10 +237,10 @@ int blake(char *filename) {
         printf("failed\n");
         exit(1);
       }
-      printf("start chunck %d\n", chunk);
+      // printf("start chunck %d\n", chunk);
       // START BASE CHUNK PROCESSING
       for (int i = 0; i < num_chunks; i++, chunk++) {
-        printf("Running on chunk %d\n", chunk);
+        // printf("Running on chunk %d\n", chunk);
 
         // Each chunk of up to 1024 bytes is split into blocks of up to 64 bytes.
         int  num_blocks = 16;
@@ -285,7 +285,7 @@ int blake(char *filename) {
           // Each block is parsed in little-endian order into message words m0... m15 and
           // compressed
           uint32_t output_blocks[16];
-          printf("chunck: %d, ", chunk);
+          // printf("chunck: %d, ", chunk);
           int access_index = (chunk % 4) * BLAKE3_CHUNK_LEN + block * BLAKE3_BLOCK_LEN;
           words_from_little_endian_bytes(
               &read_buffer[access_index], BLAKE3_BLOCK_LEN, output_blocks);
@@ -317,18 +317,18 @@ int blake(char *filename) {
           // chunk is the chaining value of that chunk.
           uint32_t out16[16];
           // printf("flags: %08x\n", flags);
-          printf("block %d input ch val: ", block);
-          for (int i = 0; i < 8; i++) printf("%08x ", input_chaining_value[i]);
-          printf("\n");
+          // printf("block %d input ch val: ", block);
+          // for (int i = 0; i < 8; i++) printf("%08x ", input_chaining_value[i]);
+          // printf("\n");
           compress(input_chaining_value, output_blocks, counter_t, block_len, flags, out16);
           // copy back the chaining value
           memcpy(chaining_value, out16, sizeof(out16) >> 1);
         }
 
-        printf("Chunk %d ", chunk);
-        printf("cv: ");
-        for (int i = 0; i < 8; i++) printf("%08x ", chaining_value[i]);
-        printf("\n");
+        // printf("Chunk %d ", chunk);
+        // printf("cv: ");
+        // for (int i = 0; i < 8; i++) printf("%08x ", chaining_value[i]);
+        // printf("\n");
         // chaining_value now contains the whole chunk's chaining value
         // save for parent processing
         memcpy(chunk_chaining_values[chunk], chaining_value, sizeof(chaining_value));
@@ -348,13 +348,14 @@ int blake(char *filename) {
 
     int current_number_of_nodes = num_chunks;
 
-    uint32_t *buffer_a = malloc((current_number_of_nodes >> 1) << 5);
+    uint32_t buffer_a[num_chunks / 2][8];
+    uint32_t buffer_b[num_chunks / 4][8];
+    // uint32_t *buffer_a = malloc((current_number_of_nodes >> 1) << 5);
     memset(buffer_a, 0, (current_number_of_nodes >> 1) << 5);
-    uint32_t *buffer_b = malloc((current_number_of_nodes >> 2) << 5);  // (num/2) * 4*8
-    memset(buffer_b, 0, (current_number_of_nodes >> 1) << 5);
+    // uint32_t *buffer_b = malloc((current_number_of_nodes >> 2) << 5);  // (num/2) * 4*8
+    memset(buffer_b, 0, (current_number_of_nodes >> 2) << 5);
 
     printf("current_number_of_nodes: %d\n", current_number_of_nodes);
-    uint8_t a_or_b = 1;
     printf("input_chaining_value: ");
     for (int i = 0; i < 8; i++) printf("%08x ", input_chaining_value[i]);
     printf("\n");
@@ -364,45 +365,48 @@ int blake(char *filename) {
       // we want the first 32 bytes
       memcpy(message_words + 8, (void *)(chunk_chaining_values + 2 * i + 1), 32);
 
-      printf("\nmessage_words:\n");
+      printf("\nmess_words: ");
       for (int i = 0; i < 8; i++) printf("%08x ", message_words[i]);
       printf("\n");
-      for (int i = 8; i < 16; i++) printf("%08x ", message_words[i]);
-      printf("\n");
+      // for (int i = 8; i < 16; i++) printf("%08x ", message_words[i]);
+      // printf("\n");
 
       uint32_t out16[16];
       compress(input_chaining_value, message_words, counter_t, num_bytes, flags, out16);
 
-      printf("Current cv:\n");
+      printf("Current cv: ");
       for (int i = 0; i < 8; i++) printf("%08x ", out16[i]);
       printf("\n");
-      // TODO +i is wrong
       memcpy(buffer_a + i, out16, sizeof(out16) >> 1);
     }
     current_number_of_nodes >>= 1;
 
+    uint8_t a_or_b = 1;
     while (current_number_of_nodes > 1) {
-      printf("using buffer %d\n", a_or_b);
       printf("current_number_of_nodes: %d\n", current_number_of_nodes);
 
-      uint32_t *buffer      = a_or_b ? buffer_a : buffer_b;
-      uint32_t *buffer_next = a_or_b ? buffer_b : buffer_a;
-      buffer_next           = realloc(buffer_next, (current_number_of_nodes >> 1) << 5);
-
-      if (a_or_b) buffer_b = buffer_next;
-      else buffer_a = buffer_next;
-
-      // if (current_number_of_nodes <= 2) flags |= ROOT;
+      if (current_number_of_nodes <= 2) flags |= ROOT;
 
       for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
         memset(message_words, 0, 64);
-        memcpy(message_words, buffer + 2 * i, 32);  // we want the first 32 bytes
-        memcpy(message_words + 8, buffer + 2 * i + 1, 32);
+        if (a_or_b) {
+          memcpy(message_words, &buffer_a[2 * i], 32);  // we want the first 32 bytes
+          memcpy(message_words + 8, &buffer_a[2 * i + 1], 32);
+        } else {
+          memcpy(message_words, &buffer_b[2 * i], 32);  // we want the first 32 bytes
+          memcpy(message_words + 8, &buffer_b[2 * i + 1], 32);
+        }
 
+        printf("\nmessage_words:\n");
+        for (int i = 0; i < 8; i++) printf("%08x ", message_words[i]);
+        printf("\n");
         uint32_t out16[16];
         compress(input_chaining_value, message_words, counter_t, num_bytes, flags, out16);
-
-        memcpy(buffer_next + i, out16, sizeof(out16) >> 1);
+        printf("Current cv:");
+        for (int i = 0; i < 8; i++) printf("%08x ", out16[i]);
+        printf("\n");
+        if (a_or_b) memcpy(&buffer_b[i], out16, sizeof(out16) >> 1);
+        else memcpy(&buffer_a[i], out16, sizeof(out16) >> 1);
       }
       current_number_of_nodes >>= 1;
       a_or_b = !a_or_b;
@@ -411,7 +415,7 @@ int blake(char *filename) {
     assert(current_number_of_nodes == 1);
     printf("now we have only one node\n");
     // Prepare output
-    uint32_t *result_buffer      = a_or_b ? buffer_b : buffer_a;
+    uint32_t *result_buffer      = a_or_b ? *buffer_b : *buffer_a;
     uint8_t  *running_output     = output;
     size_t    running_output_len = output_len;
     printf("output_len: %ld\n", output_len);
@@ -462,8 +466,7 @@ int blake(char *filename) {
     printf("\n");
 
     // END PARRENT PROCESSING
-    free(buffer_a);
-    free(buffer_b);
+    ;
     fclose(thread_input);
   }
 
