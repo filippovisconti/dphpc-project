@@ -338,11 +338,10 @@ int blake(char *filename) {
     printf("Finished reading\n\n");
 
     // START PARENT PROCESSING
-    printf("Parent processing\n");
-    int      counter_t = 0;                     // always 0 for parent nodes
-    int      num_bytes = 64;                    // always 64
-    uint32_t flags     = PARENT;                // set parent flag
-                                                //
+    int       counter_t = 0;       // always 0 for parent nodes
+    const int num_bytes = 64;      // always 64
+    uint32_t  flags     = PARENT;  // set parent flag
+
     const uint32_t *input_chaining_value = IV;  // input ch val is the keywords
     uint32_t        message_words[16];          // first 8 is left child, second 8 is the right one;
 
@@ -353,39 +352,23 @@ int blake(char *filename) {
     memset(buffer_a, 0, sizeof(buffer_a));
     memset(buffer_b, 0, sizeof(buffer_b));
 
-    printf("input_chaining_value: ");
-    for (int i = 0; i < 8; i++) printf("%08x ", input_chaining_value[i]);
-    printf("\n");
-
     for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
       // we want the first 32 bytes
       memcpy(message_words, (void *)(chunk_chaining_values + 2 * i), 32);
       memcpy(message_words + 8, (void *)(chunk_chaining_values + 2 * i + 1), 32);
 
-      printf("\nmess_words: ");
-      for (int i = 0; i < 8; i++) printf("%08x ", message_words[i]);
-      printf("\n");
-      // for (int i = 8; i < 16; i++) printf("%08x ", message_words[i]);
-      // printf("\n");
-
       uint32_t out16[16];
       compress(input_chaining_value, message_words, counter_t, num_bytes, flags, out16);
 
-      printf("Current cv: ");
-      for (int i = 0; i < 8; i++) printf("%08x ", out16[i]);
-      printf("\n");
       memcpy(buffer_a + i, out16, sizeof(out16) >> 1);
     }
     current_number_of_nodes >>= 1;
 
     uint8_t a_or_b = 1;
     while (current_number_of_nodes > 1) {
-      printf("current_number_of_nodes: %d\n", current_number_of_nodes);
-
       if (current_number_of_nodes <= 2) flags |= ROOT;
 
       for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
-        printf("Running on nodes %d and %d\n", 2 * i, 2 * i + 1);
         memset(message_words, 0, 64);
         if (a_or_b) {
           memcpy(message_words, &buffer_a[2 * i], 32);  // we want the first 32 bytes
@@ -395,20 +378,8 @@ int blake(char *filename) {
           memcpy(message_words + 8, &buffer_b[2 * i + 1], 32);
         }
 
-        printf("flags: %08x\n", flags);
-        printf("\nmessage_words: ");
-        for (int i = 0; i < 8; i++) printf("%08x ", message_words[i]);
-        printf("\n               ");
-        for (int i = 8; i < 16; i++) printf("%08x ", message_words[i]);
-        printf("\n");
         uint32_t out16[16];
-        printf("input ch val:  ");
-        for (size_t i = 0; i < 8; i++) printf("%08x ", input_chaining_value[i]);
-        printf("\n");
         compress(input_chaining_value, message_words, counter_t, num_bytes, flags, out16);
-        printf("Current cv:    ");
-        for (int i = 0; i < 8; i++) printf("%08x ", out16[i]);
-        printf("\n");
 
         if (a_or_b) {
           memcpy(&buffer_b[i], out16, sizeof(out16) >> 1);
@@ -421,7 +392,6 @@ int blake(char *filename) {
     }
 
     assert(current_number_of_nodes == 1);
-    printf("now we have only one node\n");
     // Prepare output
     uint32_t *result_buffer      = !a_or_b ? *buffer_b : *buffer_a;
     uint8_t  *running_output     = output;
@@ -438,39 +408,21 @@ int blake(char *filename) {
           printf("FINISHED\n");
           break;
         };
-        printf("word: %ld, byte: %d, ", word, byte);
-        printf("writing %02x\n", (uint8_t)(result_buffer[word] >> (8 * byte)));
         *running_output = (uint8_t)(result_buffer[word] >> (8 * byte)) & 0xFF;
         running_output++;
         running_output_len--;
       }
     }
 
-    printf("Finished first output round\nOutput: ");
-
-    for (size_t i = 0; i < output_len; i++) printf("%02x", output[i]);
-    printf("\n");
-
     while (running_output_len > 0) {
       uint32_t words[16];
-      printf("flags: %08x\n", flags);
-      printf("\nmessage_words: ");
-      for (int i = 0; i < 8; i++) printf("%08x ", message_words[i]);
-      printf("\n               ");
-      for (int i = 8; i < 16; i++) printf("%08x ", message_words[i]);
-      printf("\n");
-      printf("input ch val:  ");
-      for (size_t i = 0; i < 8; i++) printf("%08x ", input_chaining_value[i]);
-      printf("\n");
+
       compress(input_chaining_value, message_words, ++counter_t, num_bytes, flags, words);
-      printf("Current cv:    ");
-      for (int i = 0; i < 8; i++) printf("%08x ", words[i]);
-      printf("\n");
+
       stop = false;
 
       for (size_t word = 0; word < 16 && !stop; word++) {
         for (int byte = 0; byte < 4; byte++) {
-          // output[word * 4 + byte] = (words[word] >> (8 * byte)) & 0xFF;
           if (output_len == 0) {
             stop = true;
             break;
