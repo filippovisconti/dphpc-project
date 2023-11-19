@@ -10,11 +10,11 @@ ifeq ($(UNAME), arm64)
 CC := gcc-13
 
 test: clean
-	$(CC) $(FLAGS) -ggdb -o test blake.c quick_test.c $(INCLUDES)
+	$(CC) $(FLAGS) -ggdb -o test myblake.c blake.c quick_test.c $(INCLUDES)
 	./test
 
 blake: clean
-	@$(CC) $(FLAGS) -g -o blake myblake.c $(INCLUDES)
+	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -g -o blake myblake.c $(INCLUDES)
 	./blake
 
 run: compile 

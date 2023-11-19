@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "myblake.h"
 #include "reference_impl.h"
 
 int main(void) {
@@ -27,17 +28,37 @@ int main(void) {
     exit(1);
   }
   // system("clear");
-  uint8_t *output = malloc(output_len);
+  uint8_t *output_ref = malloc(output_len);
+  uint8_t *output_my  = malloc(output_len);
   printf("************** BLAKE3 STOUT **************\n");
-  test_blake3(has_key, key, derive_key_context, output_len, input, output);
+  test_blake3(has_key, key, derive_key_context, output_len, input, output_ref);
+  myblake("test_input", output_my, output_len);
 
-  char *output_hex = malloc(output_len * 2 + 1);
-  for (size_t i = 0; i < output_len; i++) { sprintf(output_hex + 2 * i, "%02x", output[i]); }
+
+  for (size_t i = 0; i < output_len; i++) {
+    if (output_ref[i] != output_my[i]) {
+      printf("ERROR: %zu | ", i);
+      printf("REF: %02x | ", output_ref[i]);
+      printf("GOT: %02x\n", output_my[i]);
+    }
+  }
+
+  char *output_hex_ref = malloc(output_len * 2 + 1);
+  char *output_hex     = malloc(output_len * 2 + 1);
+  for (size_t i = 0; i < output_len; i++) {
+    sprintf(output_hex_ref + 2 * i, "%02x", output_ref[i]);
+    sprintf(output_hex + 2 * i, "%02x", output_my[i]);
+  }
+
   printf("==========================================\n");
-  printf("[RESULT]:   %s\n", output_hex);
-  printf("[EXPECTED]: %s\n", comparable_result);
-  // assert(strcmp(output_hex, comparable_result) == 0);
-  // printf("\nSUCCESS\n\n");
-  free(output);
+  printf("[RESULT_REF]:   %s\n", output_hex_ref);
+  printf("[RESULT_MY]:    %s\n", output_hex);
+  printf("[EXPECTED]:     %s\n", comparable_result);
+  assert(strcmp(output_hex_ref, comparable_result) == 0);
+  bool cond = strcmp(output_hex, comparable_result) == 0;
+  if (!cond) exit(1);
+  assert(strcmp(output_hex, comparable_result) == 0);
+  printf("\nSUCCESS\n\n");
+  free(output_ref);
   return 0;
 }
