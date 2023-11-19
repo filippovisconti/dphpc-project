@@ -263,24 +263,10 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
     while (current_number_of_nodes > 1) {
       if (current_number_of_nodes <= 2) flags |= ROOT;
       if (a_or_b) {
-        printf("results in buffer_b\n");
         memset(buffer_b, 0, sizeof(buffer_b));
       } else {
-        printf("results in buffer_a\n");
         memset(buffer_a, 0, sizeof(buffer_a));
       }
-      printf("buffer_a: ");
-      for (size_t i = 0; i < num_chunks / 2; i++) {
-        for (int j = 0; j < 8; j++) { printf("%08x ", buffer_a[i][j]); }
-        printf("\n          ");
-      }
-      printf("\n");
-      printf("buffer_b: ");
-      for (size_t i = 0; i < num_chunks / 4; i++) {
-        for (int j = 0; j < 8; j++) { printf("%08x ", buffer_b[i][j]); }
-        printf("\n          ");
-      }
-      printf("\n");
       for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
         memset(message_words, 0, 64);
         if (a_or_b) {
@@ -294,36 +280,11 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
         uint32_t out16[16];
         compress(input_chaining_value, message_words, counter_t, num_bytes, flags, out16);
         // print all input of compress function
-        printf("input_chaining_value: ");
-        for (int i = 0; i < 8; i++) { printf("%08x ", input_chaining_value[i]); }
-        printf("\n");
-        printf("message_words:        ");
-        for (int i = 0; i < 16; i++) {
-          if (i == 8) printf("\n                      ");
-          printf("%08x ", message_words[i]);
-        }
-        printf("\n");
-        printf("out cv:               ");
-        for (int i = 0; i < 8; i++) { printf("%08x ", out16[i]); }
-        printf("\n");
-        printf("flags:                %08x\n", flags);
 
         if (a_or_b) {
           memcpy(&buffer_b[i], out16, sizeof(out16) >> 1);
-          printf("buffer_b: ");
-          for (size_t i = 0; i < num_chunks / 4; i++) {
-            for (int j = 0; j < 8; j++) { printf("%08x ", buffer_b[i][j]); }
-            printf("\n          ");
-          }
-          printf("\n");
         } else {
           memcpy(&buffer_a[i], out16, sizeof(out16) >> 1);
-          printf("buffer_a: ");
-          for (size_t i = 0; i < num_chunks / 2; i++) {
-            for (int j = 0; j < 8; j++) { printf("%08x ", buffer_a[i][j]); }
-            printf("\n          ");
-          }
-          printf("\n");
         }
       }
       current_number_of_nodes >>= 1;
@@ -332,37 +293,14 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
 
     assert(current_number_of_nodes == 1);
     // Prepare output
-    uint32_t *result_buffer = a_or_b ? *buffer_b : *buffer_a;
-    printf("result buffer is buffer %d: \n", !a_or_b);
-    for (size_t i = 0; i < num_chunks / 2; i++) {
-      for (int j = 0; j < 8; j++) { printf("%08x ", result_buffer[i * num_chunks + j]); }
-      printf("\n");
-    }
-    printf("\n");
     uint8_t *running_output     = output;
     size_t   running_output_len = output_len;
     printf("output_len: %ld\n", output_len);
     memset(output, 0, output_len);
 
-      uint32_t words[16];
-
-      compress(input_chaining_value, message_words, counter_t, num_bytes, flags, words);
     bool stop = false;
-    for (size_t word = 0; word < 16 && !stop; word++) {
-      for (int byte = 0; byte < 4; byte++) {
-        if (running_output_len == 0) {
-          stop = true;
-          printf("FINISHED\n");
-          break;
-        };
-        *running_output = (uint8_t)(words[word] >> (8 * byte));
-        running_output++;
-        running_output_len--;
-      }
-    }
-
+counter_t--;
     while (running_output_len > 0) {
-      printf("running_output_len: %ld\n", running_output_len);
       uint32_t words[16];
 
       compress(input_chaining_value, message_words, ++counter_t, num_bytes, flags, words);

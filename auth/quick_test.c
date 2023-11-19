@@ -55,8 +55,8 @@ int main(void) {
   printf("[RESULT_MY]:    %s\n", output_hex);
   printf("[EXPECTED]:     %s\n", comparable_result);
   assert(strcmp(output_hex_ref, comparable_result) == 0);
-  bool cond = strcmp(output_hex, comparable_result) == 0;
-  if (!cond) exit(1);
+  // bool cond = strcmp(output_hex, comparable_result) == 0;
+  // if (!cond) exit(1);
   assert(strcmp(output_hex, comparable_result) == 0);
   printf("\nSUCCESS\n\n");
   free(output_ref);
