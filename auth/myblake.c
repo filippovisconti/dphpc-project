@@ -1,9 +1,6 @@
 
 #include "myblake.h"
 
-#include <stdint.h>
-#include <stdio.h>
-
 uint32_t IV[8] = {
     0x6A09E667,
     0xBB67AE85,
@@ -136,8 +133,9 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
   size_t   max_depth   = (int)ceil(log2(num_chunks));  // maximum depth of the tree
   uint64_t sub_tree_depth = max_depth - level;         // depth of each thread's subtree
   uint64_t num_leaves     = 1 << sub_tree_depth;       // 2^sub_tree_depth
+  size_t   t              = 0;
 
-  for (size_t t = 0; t < num_threads; t++) {
+  {
     int stride = t * num_leaves << CHUNK_SIZE_LOG;
     printf("stride %d\n", stride);
     int read_size = num_leaves << CHUNK_SIZE_LOG;
@@ -299,7 +297,7 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
     memset(output, 0, output_len);
 
     bool stop = false;
-counter_t--;
+    counter_t--;
     while (running_output_len > 0) {
       uint32_t words[16];
 
