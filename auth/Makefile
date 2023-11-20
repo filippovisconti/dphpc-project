@@ -13,12 +13,20 @@ test: clean
 	$(CC) $(FLAGS) -ggdb -o test myblake.c blake.c quick_test.c $(INCLUDES)
 	./test
 
+test_mp: clean
+	$(CC) $(FLAGS) -DUSE_OPENMP -o test myblake.c blake.c quick_test.c $(INCLUDES)
+	OMP_NUM_THREADS=10 ./test
+
+blake_mp: clean
+	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -DUSE_OPENMP -g -o blake myblake.c $(INCLUDES)
+
 blake: clean
 	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -g -o blake myblake.c $(INCLUDES)
 	./blake
 
-run: compile 
-	./main_arm
+run: blake_mp
+	OMP_NUM_THREADS=10 ./blake
+
 
 compile: clean
 	@echo "No PAPI support for arm64"
@@ -26,7 +34,7 @@ compile: clean
 
 debug:
 	$(CC) $(FLAGS) -g -o main_arm $(FILES) $(INCLUDES)
-	
+
 clean:
 	@rm -fR main_arm blake main_arm.dSYM/ test test.dSYM/ blake.dSYM
 
@@ -44,9 +52,10 @@ INCLUDES := -I${CPATH} -I include -L${LD_LIBRARY_PATH} -lm
 
 blake:
 	$(CC) $(FLAGS) -o blake myblake.c $(INCLUDES)
+
 print:
 	python3 ${PAPI_ROOT}/bin/papi_hl_output_writer.py --source measurements/papi_hl_output --notation=derived --type=summary > papi.log
-	
+
 run: debug
 	$(PAPI_EXPORT) ./main
 
@@ -57,9 +66,9 @@ compile: clean
 
 debug: clean
 	$(CC) $(FLAGS) -ggdb -g -o main $(INCLUDES) -lpapi $(FILES)
-	
+
 clean:
-	rm -fR main papi_output/* 
+	rm -fR main papi_output/*
 
 endif
 
@@ -77,7 +86,7 @@ ssh-download:
 ssh-debug:
 	# module load gcc/9.3.0 papi/7.0.1
 	# export OMP_NUM_THREADS=30
-	@ssh $(USER)@$(REMOTE_HOST) -t "OMP_NUM_THREADS=30 sbatch batch_script.sh"
+	@ssh $(USER)@$(REMOTE_HOST) -t "OMP_NUM_THREADS=32 sbatch batch_script.sh"
 
 
 # gprof:

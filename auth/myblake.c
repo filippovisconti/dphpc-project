@@ -1,6 +1,12 @@
 
 #include "myblake.h"
 
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+
+#include "omp.h"
+// #define USE_OPENMP
 uint32_t IV[8] = {
     0x6A09E667,
     0xBB67AE85,
@@ -116,44 +122,71 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
   }
 
   fseek(input, 0L, SEEK_END);
-  size_t num_chunks        = ftell(input) >> CHUNK_SIZE_LOG;  // / 1024
-  bool   chunks_pow_of_two = (num_chunks & (num_chunks - 1)) == 0;
+  int  num_chunks        = ftell(input) >> CHUNK_SIZE_LOG;  // / 1024
+  bool chunks_pow_of_two = (num_chunks & (num_chunks - 1)) == 0;
+  printf("Number of chunks: %d\n", num_chunks);
 
+  fclose(input);
   if (!chunks_pow_of_two) {
     printf("Number of chunks is not a power of two\n");
     exit(1);
   }
+#ifdef USE_OPENMP
+  int num_threads = omp_get_max_threads();
+  printf("[OMP] Number of available threads: %d\n", num_threads);
+  num_threads = 1 << (int)log2(num_threads);  // get largest power of 2 smaller than num_threads
+  omp_set_dynamic(0);
+  if (num_chunks > (num_threads << 2))
+    omp_set_num_threads(num_threads);  // each thread handles at least 4 chunks
+  else {
+    num_threads = 2;
+    omp_set_num_threads(num_threads);  // not worth parallelizing, use only one thread
+  }
+  printf("[OMP] Number of threads: %d\n", omp_get_max_threads());
+  assert(omp_get_max_threads() == num_threads);
+  printf("Running with num_threads: %d\n", num_threads);
+#else
+  int      num_threads = 2;
+#endif
+  size_t level     = (int)log2(num_threads);  // tree depth in which we have one node per thread
+  size_t max_depth = (int)ceil(log2(num_chunks));  // maximum depth of the tree
+  size_t sub_tree_depth = max_depth - level;       // depth of each thread's subtree
+  size_t num_leaves     = 1 << sub_tree_depth;     // 2^sub_tree_depth
+#ifdef USE_OPENMP
+  uint32_t parent_chaining_values[num_threads][8];
+#else
+  uint32_t parent_chaining_values[2][8];
+#endif
 
-  fclose(input);
-
-  printf("Number of chunks: %zu\n", num_chunks);
-
-  size_t   num_threads = 1;                       // 8;
-  size_t   level       = (int)log2(num_threads);  // tree depth in which we have one node per thread
-  size_t   max_depth   = (int)ceil(log2(num_chunks));  // maximum depth of the tree
-  uint64_t sub_tree_depth = max_depth - level;         // depth of each thread's subtree
-  uint64_t num_leaves     = 1 << sub_tree_depth;       // 2^sub_tree_depth
-  size_t   t              = 0;
-
+  // begin parallel region
+#ifdef USE_OPENMP
+#pragma omp parallel
+#else
+  for (int thread_num = 0; thread_num < 2; thread_num++)
+#endif
   {
-    int stride = t * num_leaves << CHUNK_SIZE_LOG;
+#ifdef USE_OPENMP
+    int thread_num = omp_get_thread_num();
+    assert(thread_num <= num_threads);
+#endif
+    int stride = thread_num * num_leaves << CHUNK_SIZE_LOG;
     printf("stride %d\n", stride);
     int read_size = num_leaves << CHUNK_SIZE_LOG;
     printf("read_size %d\n", read_size);
 
     FILE *thread_input = fopen(filename, "rb");
     fseek(thread_input, stride, SEEK_SET);
-    printf("Thread %zu: %d\n\n", t, stride);
+    printf("Thread %d: %d\n\n", thread_num, stride);
 
-    uint32_t chunk_chaining_values[num_chunks][8];
-    int      chunk = 0;
+    uint32_t chunk_chaining_values[num_leaves][8];
+    int      chunk_counter = 0;
+    memset(chunk_chaining_values, 0, sizeof(chunk_chaining_values));
+
+    int chunk = 0;
     while (!feof(thread_input) && read_size > 0) {
       char  *read_buffer = malloc(4 * CHUNK_SIZE);
       size_t len         = fread(read_buffer, 1, 4 * CHUNK_SIZE, thread_input);
-      if ((len == 0) || (len >= (num_leaves << CHUNK_SIZE_LOG))) {
-        printf("finished\n");
-        break;
-      }  // EOF
+      if ((len == 0) || (len > (num_leaves << CHUNK_SIZE_LOG))) { break; }  // EOF
 
       read_size -= len;
 
@@ -174,26 +207,15 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
         }
 
         uint32_t chaining_value[8];
+        uint64_t counter_t = chunk + num_leaves * thread_num;
         for (int block = 0; block < num_blocks; block++) {
-          int      block_len = BLAKE3_BLOCK_LEN;
-          uint32_t flags     = 0;
+          // printf("[DEBUG:] chunk: %d, ", chunk + num_leaves * thread_num);
 
-          // if we're in the last block of the last chunk
+          int block_len = BLAKE3_BLOCK_LEN;
           if (block == num_blocks - 1 && last_chunk) {
-            // printf("last block of last chunk\n");
-
-            // if (len % BLAKE3_BLOCK_LEN != 0)
-            // if remainder is not a multiple of 64, last block is not full
             if ((remainder & (BLAKE3_BLOCK_LEN - 1)) == 0) {
-              // printf("last block is full\n");
-
-              // calculate how many bytes are present
               block_len = remainder % BLAKE3_BLOCK_LEN;
-
-              // if last block has less than 64 bytes
               if (block_len < BLAKE3_BLOCK_LEN) {
-
-                // pad with zeros
                 memset(&read_buffer[block * BLAKE3_BLOCK_LEN + block_len], 0,
                     BLAKE3_BLOCK_LEN - block_len);
               }
@@ -201,20 +223,17 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
           }
 
           uint32_t output_blocks[16];
-          // printf("chunck: %d, ", chunk);
-          int access_index = (chunk % 4) * BLAKE3_CHUNK_LEN + block * BLAKE3_BLOCK_LEN;
+          int      access_index = (chunk % 4) * BLAKE3_CHUNK_LEN + block * BLAKE3_BLOCK_LEN;
           words_from_little_endian_bytes(
               &read_buffer[access_index], BLAKE3_BLOCK_LEN, output_blocks);
 
+          // If a chunk is the root of its tree, the last block of that chunk also
+          // TODO: sets the ROOT flag.
+          uint32_t flags = 0;
           if (block == 0) flags |= CHUNK_START;
           if ((block % num_blocks) == (num_blocks - 1)) flags |= CHUNK_END;
 
-          int counter_t = chunk;  // TODO: useless variable, currently
-
           if (num_blocks == 1) assert(flags == (CHUNK_START | CHUNK_END));
-
-          // If a chunk is the root of its tree, the last block of that chunk also
-          // TODO: sets the ROOT flag.
 
           const uint32_t *input_chaining_value = (block == 0 ? IV : chaining_value);
 
@@ -223,13 +242,17 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
           memcpy(chaining_value, out16, sizeof(out16) >> 1);
         }
 
-        // save for parent processing
-        memcpy(chunk_chaining_values[chunk], chaining_value, sizeof(chaining_value));
+        // save last block's cv for parent processing
+        memcpy(chunk_chaining_values[chunk_counter++], chaining_value, sizeof(chaining_value));
       }
       // END BASE CHUNK PROCESSING
     }
     printf("Finished reading\n\n");
-
+    // printf("chunk_chaining_values:\n");
+    // for (size_t i = 0; i < num_leaves; i++) {
+    //   for (int j = 0; j < 8; j++) { printf("%08x ", chunk_chaining_values[i][j]); }
+    //   printf("\n");
+    // }
     // START PARENT PROCESSING
     int       counter_t = 0;       // always 0 for parent nodes
     const int num_bytes = 64;      // always 64
@@ -238,10 +261,10 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
     const uint32_t *input_chaining_value = IV;  // input ch val is the keywords
     uint32_t        message_words[16];          // first 8 is left child, second 8 is the right one;
 
-    int current_number_of_nodes = num_chunks;
+    int current_number_of_nodes = num_leaves;
 
-    uint32_t buffer_a[num_chunks / 2][8];
-    uint32_t buffer_b[num_chunks / 4][8];
+    uint32_t buffer_a[num_leaves / 2][8];
+    uint32_t buffer_b[num_leaves / 4][8];
     memset(buffer_a, 0, sizeof(buffer_a));
     memset(buffer_b, 0, sizeof(buffer_b));
 
@@ -259,7 +282,6 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
 
     uint8_t a_or_b = 1;
     while (current_number_of_nodes > 1) {
-      if (current_number_of_nodes <= 2) flags |= ROOT;
       if (a_or_b) {
         memset(buffer_b, 0, sizeof(buffer_b));
       } else {
@@ -268,17 +290,19 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
       for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
         memset(message_words, 0, 64);
         if (a_or_b) {
-          memcpy(message_words, &buffer_a[2 * i][0], 32);
+          memcpy(message_words + 0, &buffer_a[2 * i][0], 32);
           memcpy(message_words + 8, &buffer_a[2 * i + 1][0], 32);
         } else {
-          memcpy(message_words, &buffer_b[2 * i][0], 32);
+          memcpy(message_words + 0, &buffer_b[2 * i][0], 32);
           memcpy(message_words + 8, &buffer_b[2 * i + 1][0], 32);
         }
 
         uint32_t out16[16];
         compress(input_chaining_value, message_words, counter_t, num_bytes, flags, out16);
         // print all input of compress function
-
+        printf("out16:\n");
+        for (int j = 0; j < 8; j++) { printf("%08x ", out16[j]); }
+        printf("\n");
         if (a_or_b) {
           memcpy(&buffer_b[i], out16, sizeof(out16) >> 1);
         } else {
@@ -289,39 +313,102 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
       a_or_b = !a_or_b;
     }
 
+    fclose(thread_input);
     assert(current_number_of_nodes == 1);
-    // Prepare output
-    uint8_t *running_output     = output;
-    size_t   running_output_len = output_len;
-    printf("output_len: %ld\n", output_len);
-    memset(output, 0, output_len);
+    printf("returning from parent %d\n", thread_num);
+    if (a_or_b) memcpy(parent_chaining_values[thread_num], buffer_a, sizeof(buffer_a));
+    else memcpy(parent_chaining_values[thread_num], buffer_b, sizeof(buffer_b));
+  }
 
-    bool stop = false;
-    counter_t--;
-    while (running_output_len > 0) {
-      uint32_t words[16];
+  // END PARALLEL REGION
+  int       counter_t = 0;       // always 0 for parent nodes
+  const int num_bytes = 64;      // always 64
+  uint32_t  flags     = PARENT;  // set parent flag
 
-      compress(input_chaining_value, message_words, ++counter_t, num_bytes, flags, words);
+  const uint32_t *input_chaining_value = IV;  // input ch val is the keywords
+  uint32_t        message_words[16];          // first 8 is left child, second 8 is the right one;
+  int             current_number_of_nodes = num_threads;
 
-      stop = false;
+  uint32_t buffer_a[num_leaves / 2][8];
+  uint32_t buffer_b[num_leaves / 4][8];
+  memset(buffer_a, 0, sizeof(buffer_a));
+  memset(buffer_b, 0, sizeof(buffer_b));
 
-      for (size_t word = 0; word < 16 && !stop; word++) {
-        for (int byte = 0; byte < 4; byte++) {
-          if (output_len == 0) {
-            printf("FINISHED\n");
-            stop = true;
-            break;
-          };
+  for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
+    // we want the first 32 bytes
+    memcpy(message_words + 0, (&parent_chaining_values[2 * i + 0]), 32);
+    memcpy(message_words + 8, (&parent_chaining_values[2 * i + 1]), 32);
 
-          *running_output = (uint8_t)(words[word] >> (8 * byte));
-          running_output++;
-          running_output_len--;
-        }
+    uint32_t out16[16];
+    if (current_number_of_nodes <= 2) flags |= ROOT;
+    compress(input_chaining_value, message_words, counter_t, num_bytes, flags, out16);
+    memcpy(buffer_a + i, out16, sizeof(out16) >> 1);
+  }
+  current_number_of_nodes >>= 1;
+
+  uint8_t a_or_b = 1;
+  while (current_number_of_nodes > 1) {
+    if (current_number_of_nodes <= 2) flags |= ROOT;
+    if (a_or_b) {
+      memset(buffer_b, 0, sizeof(buffer_b));
+    } else {
+      memset(buffer_a, 0, sizeof(buffer_a));
+    }
+    for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
+      memset(message_words, 0, 64);
+      if (a_or_b) {
+        memcpy(message_words + 0, &buffer_a[2 * i][0], 32);
+        memcpy(message_words + 8, &buffer_a[2 * i + 1][0], 32);
+      } else {
+        memcpy(message_words + 0, &buffer_b[2 * i][0], 32);
+        memcpy(message_words + 8, &buffer_b[2 * i + 1][0], 32);
+      }
+
+      uint32_t out16[16];
+      compress(input_chaining_value, message_words, counter_t, num_bytes, flags, out16);
+      // print all input of compress function
+
+      if (a_or_b) {
+        memcpy(&buffer_b[i], out16, sizeof(out16) >> 1);
+      } else {
+        memcpy(&buffer_a[i], out16, sizeof(out16) >> 1);
       }
     }
-    // END PARRENT PROCESSING
-    fclose(thread_input);
+    current_number_of_nodes >>= 1;
+    a_or_b = !a_or_b;
   }
+  printf("current_number_of_nodes: %d\n", current_number_of_nodes);
+  assert(current_number_of_nodes == 1);
+  // Prepare output
+  uint8_t *running_output     = output;
+  size_t   running_output_len = output_len;
+  printf("output_len: %ld\n", output_len);
+  memset(output, 0, output_len);
+
+  bool stop = false;
+  counter_t--;
+  while (running_output_len > 0) {
+    uint32_t words[16];
+
+    compress(input_chaining_value, message_words, ++counter_t, num_bytes, flags, words);
+
+    stop = false;
+
+    for (size_t word = 0; word < 16 && !stop; word++) {
+      for (int byte = 0; byte < 4; byte++) {
+        if (output_len == 0) {
+          printf("FINISHED\n");
+          stop = true;
+          break;
+        };
+
+        *running_output = (uint8_t)(words[word] >> (8 * byte));
+        running_output++;
+        running_output_len--;
+      }
+    }
+  }
+  // END PARRENT PROCESSING
 }
 #if defined MYBLAKE_MAIN
 int         main(void) {
@@ -331,7 +418,7 @@ int         main(void) {
 
   myblake(filename, output, output_len);
 
-  printf("Output: ");
+  printf("\n\nOutput: ");
   for (size_t i = 0; i < output_len; i++) {
     if (i % 32 == 0) printf("\n");
     printf("%02x", output[i]);

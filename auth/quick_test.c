@@ -28,7 +28,6 @@ int main(void) {
   myblake("test_input", output_my, output_len);
   printf("****************************************************\n");
 
-
   for (size_t i = 0; i < output_len; i++) {
     if (output_ref[i] != output_my[i]) {
       printf("ERROR: %zu | ", i);
