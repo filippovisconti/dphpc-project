@@ -2,7 +2,7 @@ FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O0 -march=native
 INCLUDES := -I include -lm -fopenmp
 UNAME := $(shell uname -m)
 
-all: compile
+all: blake
 
 # FILES:= $(shell find . -name \*.c)
 FILES:= blake.c benchmark.c sha256.c
@@ -10,7 +10,7 @@ ifeq ($(UNAME), arm64)
 CC := gcc-13
 
 test: clean
-	$(CC) $(FLAGS) -ggdb -o test myblake.c blake.c quick_test.c $(INCLUDES)
+	$(CC) $(FLAGS) -g -o test myblake.c blake.c quick_test.c $(INCLUDES)
 	./test
 
 test_mp: clean
@@ -27,20 +27,12 @@ blake: clean
 run: blake_mp
 	OMP_NUM_THREADS=10 ./blake
 
-
-compile: clean
-	@echo "No PAPI support for arm64"
-	@$(CC) $(FLAGS) -o main_arm $(FILES) $(INCLUDES)
-
-debug:
-	$(CC) $(FLAGS) -g -o main_arm $(FILES) $(INCLUDES)
-
 clean:
 	@rm -fR main_arm blake main_arm.dSYM/ test test.dSYM/ blake.dSYM
 
 else
 CC := gcc
-
+FLAGS += -DUSE_PAPI
 
 PAPI_EVENTS:="PAPI_TOT_INS,PAPI_TOT_CYC,PAPI_VEC_SP,PAPI_VEC_DP"
 PAPI_OUTPUT_DIRECTORY="measurements"
