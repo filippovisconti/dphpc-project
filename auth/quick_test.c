@@ -30,13 +30,13 @@ void run_test(char *filename) {
   myblake(filename, output_my, output_len);
   printf("****************************************************\n");
 
-  for (size_t i = 0; i < output_len; i++) {
-    if (output_ref[i] != output_my[i]) {
-      printf("ERROR: %zu | ", i);
-      printf("REF: %02x | ", output_ref[i]);
-      printf("GOT: %02x\n", output_my[i]);
-    }
-  }
+  // for (size_t i = 0; i < output_len; i++) {
+  //   if (output_ref[i] != output_my[i]) {
+  //     printf("ERROR: %3zu | ", i);
+  //     printf("REF: %02x | ", output_ref[i]);
+  //     printf("GOT: %02x\n", output_my[i]);
+  //   }
+  // }
 
   char *output_hex_ref = malloc(output_len * 2 + 1);
   char *output_hex     = malloc(output_len * 2 + 1);
@@ -63,10 +63,10 @@ int main(void) {
   char prefix[] = "input_data/input_";
   char suffix[] = ".txt";
 
-  char  *sizes[]     = {"1GB"};//{"8KB", "32KB", "128KB", "1MB", "16MB", "128MB", "1GB"};
-  size_t num_sizes   = 1;
+  char  *sizes[]   = {"8KB", "32KB", "64KB", /* "128KB", */ "1MB", "16MB", "128MB", "1GB"};
+  size_t num_sizes = 7;
 
-  int    num_avail_threads = omp_get_max_threads();
+  int num_avail_threads = omp_get_max_threads();
   omp_set_dynamic(0);
   for (size_t size = 0; size < num_sizes; size++) {
     char filename[100];
