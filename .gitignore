@@ -298,4 +298,4 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/python
 
 auth/input_data/
-enc/input.txt
+enc/input_data/
