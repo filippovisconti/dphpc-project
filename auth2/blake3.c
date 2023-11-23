@@ -160,13 +160,15 @@ inline static void compress(const uint32_t chaining_value[8], const uint32_t blo
   memcpy(out, state, sizeof(state));
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
     // uint8_t key[BLAKE3_KEY_LEN];
     // bool has_key = false;
     // const char *derive_key_context = NULL;
-    
-    char  filename[] = "test_input";
-    FILE *input_stream = fopen(filename, "rb");
+    if (argc <= 1) return 1;
+    char* test_file = argv[1];
+
+    // char filename[] = test_file;
+    FILE *input_stream = fopen(test_file, "rb");
     if (input_stream == NULL) {
         printf("Can't open file\n");
         exit(1);
@@ -218,21 +220,36 @@ int main(void) {
     for (int i = 0; i < nchunks; i++) {
         _blake3_chunk_state* self = (input_chunks + i);
 
-        uint32_t chaining_value[16];
+        uint32_t chaining_value[8];
         for (int b = 0; b < BLAKE3_BLOCK_CAP; b++) {
             uint32_t block_words[16];
             words_from_little_endian_bytes(self->block + (b*BLAKE3_BLOCK_LEN), BLAKE3_BLOCK_LEN, block_words);
             
-            uint32_t flags;
+            uint32_t flags = 0;
             if (b == 0) {
                 memcpy(chaining_value, IV, 8 * sizeof(uint32_t));
                 flags = CHUNK_START;
             }
-            if (b == BLAKE3_BLOCK_LEN - 1) flags = CHUNK_END;
+            if (b == BLAKE3_BLOCK_CAP - 1) flags = CHUNK_END;
             
             uint32_t out16[16];
             compress(chaining_value, block_words, i, BLAKE3_BLOCK_LEN, flags, out16);
-            memcpy(chaining_value, out16, sizeof(uint32_t) * 16);
+            printf("Chunk %i, Block %i compression, counter = %i\n, flags = %i", i, b, i, flags);
+            printf("    block words: ");
+            for (size_t i = 0; i < 16; i++) {
+                printf("%02x", block_words[i]);
+            }
+            printf("\n    chaining value: ");
+            for (size_t i = 0; i < 8; i++) {
+                printf("%02x", chaining_value[i]);
+            }
+            printf("\n    out: ");
+            for (size_t i = 0; i < 16; i++) {
+                printf("%02x", out16[i]);
+            }
+            printf("\n");
+
+            for (int i = 0; i < 8; i++) chaining_value[i] = out16[i];
         }
         memcpy(compression_outputs[i], chaining_value, sizeof(uint32_t) * 16);
     }
@@ -250,7 +267,7 @@ int main(void) {
     // creating parent nodes until root is reached
     int on_compression_stack = nchunks;
     uint32_t next_compression_outputs[on_compression_stack][16];
-    while (on_compression_stack > 1) {
+    while (on_compression_stack > 2) {
         printf("Compression Stack: %i elements\n", on_compression_stack);
         for (int n = 0; n < on_compression_stack; n++) {
             printf("    element %i:", n);
@@ -263,6 +280,7 @@ int main(void) {
         if (on_compression_stack % 2) {
             // TODO: the last chunk will not merge to form a parent, just add it to the next outputs
             memcpy(next_compression_outputs[nchunks/2], compression_outputs[nchunks - 1], sizeof(uint32_t) * 16);
+            on_compression_stack--;
             next_on_compression_stack++;
         }
 
@@ -293,21 +311,34 @@ int main(void) {
 
     // reached root
     // compression_outputs[0] is the root
-    assert(on_compression_stack == 1); // single node which is the root
+    assert(on_compression_stack <= 2);
+    uint32_t root_words[16];
+    uint32_t flags;
+    if (on_compression_stack == 1) {
+        memcpy(root_words, compression_outputs[0], sizeof(uint32_t) * 16);
+        flags = CHUNK_END;
+    } else {
+        memcpy(root_words, compression_outputs[0], sizeof(uint32_t) * 8);
+        memcpy(root_words + 8, compression_outputs[1], sizeof(uint32_t) * 8);
+        flags = PARENT;
+    }
+
     printf("found root: ");
     for (size_t i = 0; i < 16; i++) {
-        printf("%02x", compression_outputs[0][i]);
+        printf("%02x", root_words[i]);
     }
     printf("\n");
 
     uint64_t output_block_counter = 0;
     size_t out_len = BLAKE3_OUT_LEN;
     uint8_t output[out_len];
-    uint8_t *out_u8 = output;
+    void *out = output;
+    uint8_t *out_u8 = (uint8_t *)out;
 
     while (out_len > 0) {
         uint32_t words[16];
-        compress(IV, compression_outputs[0], output_block_counter, BLAKE3_BLOCK_LEN, ROOT, words);
+        printf("flags: %i\n", flags | ROOT); // ATTN
+        compress(IV, root_words, output_block_counter, BLAKE3_BLOCK_LEN, flags | ROOT, words);
         for (size_t word = 0; word < 16; word++) {
             for (int byte = 0; byte < 4; byte++) {
                 if (out_len == 0) { break; }
@@ -320,7 +351,7 @@ int main(void) {
     }
 
     printf("Output: ");
-    for (size_t i = 0; i < out_len; i++) 
+    for (size_t i = 0; i < BLAKE3_OUT_LEN / sizeof(uint8_t); i++) 
         printf("%02x", output[i]);
     printf("\n");
 
