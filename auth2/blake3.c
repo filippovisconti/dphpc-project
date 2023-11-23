@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <string.h>
+#include <assert.h>
 
 // #include "include/reference_impl.h"
 
@@ -44,6 +45,18 @@ static uint32_t IV[8] = {
     0x5BE0CD19,
 };
 
+inline static void words_from_little_endian_bytes(
+    const void *bytes, size_t bytes_len, uint32_t *out) {
+  assert(bytes_len % 4 == 0);
+  const uint8_t *u8_ptr = (const uint8_t *)bytes;
+  for (size_t i = 0; i < (bytes_len / 4); i++) {
+    out[i] = ((uint32_t)(*u8_ptr++));
+    out[i] += ((uint32_t)(*u8_ptr++)) << 8;
+    out[i] += ((uint32_t)(*u8_ptr++)) << 16;
+    out[i] += ((uint32_t)(*u8_ptr++)) << 24;
+  }
+}
+
 int store_chunks(_blake3_chunk_state* chunks, size_t pos, 
                  const void * input, size_t input_len) {
     int counter = 0;
@@ -64,50 +77,87 @@ int store_chunks(_blake3_chunk_state* chunks, size_t pos,
     return counter;
 }
 
-// inline static void compress(const uint32_t chaining_value[8], const uint32_t block_words[16],
-//     uint64_t counter, uint32_t block_len, uint32_t flags, uint32_t out[16]) {
-//   uint32_t state[16] = {
-//       chaining_value[0],
-//       chaining_value[1],
-//       chaining_value[2],
-//       chaining_value[3],
-//       chaining_value[4],
-//       chaining_value[5],
-//       chaining_value[6],
-//       chaining_value[7],
-//       IV[0],
-//       IV[1],
-//       IV[2],
-//       IV[3],
-//       (uint32_t)counter,
-//       (uint32_t)(counter >> 32),
-//       block_len,
-//       flags,
-//   };
-//   uint32_t block[16];
-//   memcpy(block, block_words, sizeof(block));
+inline static uint32_t rotate_right(uint32_t x, int n) {
+  return (x >> n) | (x << (32 - n));
+}
 
-//   round_function(state, block);  // round 1
-//   permute(block);
-//   round_function(state, block);  // round 2
-//   permute(block);
-//   round_function(state, block);  // round 3
-//   permute(block);
-//   round_function(state, block);  // round 4
-//   permute(block);
-//   round_function(state, block);  // round 5
-//   permute(block);
-//   round_function(state, block);  // round 6
-//   permute(block);
-//   round_function(state, block);  // round 7
+inline static void g(
+    uint32_t state[16], size_t a, size_t b, size_t c, size_t d, uint32_t mx, uint32_t my) {
+  state[a] = state[a] + state[b] + mx;
+  state[d] = rotate_right(state[d] ^ state[a], 16);
+  state[c] = state[c] + state[d];
+  state[b] = rotate_right(state[b] ^ state[c], 12);
+  state[a] = state[a] + state[b] + my;
+  state[d] = rotate_right(state[d] ^ state[a], 8);
+  state[c] = state[c] + state[d];
+  state[b] = rotate_right(state[b] ^ state[c], 7);
+}
 
-//   for (size_t i = 0; i < 8; i++) {
-//     state[i] ^= state[i + 8];
-//     state[i + 8] ^= chaining_value[i];
-//   }
+inline static void round_function(uint32_t state[16], uint32_t m[16]) {
+  // Mix the columns.
+  g(state, 0, 4, 8, 12, m[0], m[1]);
+  g(state, 1, 5, 9, 13, m[2], m[3]);
+  g(state, 2, 6, 10, 14, m[4], m[5]);
+  g(state, 3, 7, 11, 15, m[6], m[7]);
+  // Mix the diagonals.
+  g(state, 0, 5, 10, 15, m[8], m[9]);
+  g(state, 1, 6, 11, 12, m[10], m[11]);
+  g(state, 2, 7, 8, 13, m[12], m[13]);
+  g(state, 3, 4, 9, 14, m[14], m[15]);
+}
 
-//   memcpy(out, state, sizeof(state));
-// }
+static size_t MSG_PERMUTATION[16] = {2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8};
+
+inline static void permute(uint32_t m[16]) {
+  uint32_t permuted[16];
+  for (size_t i = 0; i < 16; i++) { permuted[i] = m[MSG_PERMUTATION[i]]; }
+  memcpy(m, permuted, sizeof(permuted));
+}
+
+inline static void compress(const uint32_t chaining_value[8], const uint32_t block_words[16],
+    uint64_t counter, uint32_t block_len, uint32_t flags, uint32_t out[16]) {
+  uint32_t state[16] = {
+      chaining_value[0],
+      chaining_value[1],
+      chaining_value[2],
+      chaining_value[3],
+      chaining_value[4],
+      chaining_value[5],
+      chaining_value[6],
+      chaining_value[7],
+      IV[0],
+      IV[1],
+      IV[2],
+      IV[3],
+      (uint32_t)counter,
+      (uint32_t)(counter >> 32),
+      block_len,
+      flags,
+  };
+  uint32_t block[16];
+  memcpy(block, block_words, sizeof(block));
+
+  round_function(state, block);  // round 1
+  permute(block);
+  round_function(state, block);  // round 2
+  permute(block);
+  round_function(state, block);  // round 3
+  permute(block);
+  round_function(state, block);  // round 4
+  permute(block);
+  round_function(state, block);  // round 5
+  permute(block);
+  round_function(state, block);  // round 6
+  permute(block);
+  round_function(state, block);  // round 7
+
+  for (size_t i = 0; i < 8; i++) {
+    state[i] ^= state[i + 8];
+    state[i + 8] ^= chaining_value[i];
+  }
+
+  memcpy(out, state, sizeof(state));
+}
 
 int main(void) {
     // uint8_t key[BLAKE3_KEY_LEN];
@@ -167,10 +217,10 @@ int main(void) {
     for (int i = 0; i < nchunks; i++) {
         _blake3_chunk_state* self = (input_chunks + i);
 
-        const uint32_t chaining_value[8];
+        uint32_t chaining_value[8];
         for (int b = 0; b < BLAKE3_BLOCK_CAP; b++) {
             uint32_t block_words[16];
-            words_from_little_endian_bytes(self->block[b*BLAKE3_BLOCK_LEN], BLAKE3_BLOCK_LEN, block_words);
+            words_from_little_endian_bytes(self->block + (b*BLAKE3_BLOCK_LEN), BLAKE3_BLOCK_LEN, block_words);
             
             uint32_t flags;
             if (b == 0) {
@@ -205,7 +255,7 @@ int main(void) {
             // left child
             memcpy(parent_words, compression_outputs[i], sizeof(uint32_t) * 8);
             // right child
-            memcpy(parent_words[8], compression_outputs[i + 1], sizeof(uint32_t) * 8);
+            memcpy(parent_words + 8, compression_outputs[i + 1], sizeof(uint32_t) * 8);
 
             uint64_t counter   = 0;      // Always 0 for parent nodes.
             uint32_t flags = PARENT;
@@ -235,7 +285,7 @@ int main(void) {
         compress(IV, compression_outputs[0], output_block_counter, BLAKE3_BLOCK_LEN, ROOT, words);
         for (size_t word = 0; word < 16; word++) {
             for (int byte = 0; byte < 4; byte++) {
-                if (out_len == 0) { return; }
+                if (out_len == 0) { break; }
 
                 *out_u8 = (uint8_t)(words[word] >> (8 * byte));
                 out_u8++;
