@@ -61,8 +61,9 @@ int store_chunks(_blake3_chunk_state* chunks, size_t pos,
                  const void * input, size_t input_len) {
     int counter = 0;
     int bytes_copied = 0;
+    printf("input length: %i\n", input_len);
     while (bytes_copied < input_len) {
-        printf("    bytes_copied = %i; iteration pos: %i\n", input_len, pos);
+        printf("    chunk_count: %i\n", pos);
         _blake3_chunk_state* curr_chunk = chunks + pos;
         // todo: only works for even blocks
         memcpy(curr_chunk->block, input + bytes_copied, BLAKE3_CHUNK_LEN);
@@ -189,9 +190,9 @@ int main(void) {
     // read in file and store chunks in array
     while (1) {
         ssize_t n = fread(buf, 1, sizeof(buf), input_stream);
-        printf("n: %i\n", n);
+        // printf("n: %i\n", n);
         if (n > 0) {
-            printf("Buf: %s\n", buf);
+            // printf("Buf: %s\n", buf);
             nchunks += store_chunks(input_chunks, nchunks, buf, n);
         } else if (n == 0) {
             break; // end of file
@@ -217,7 +218,7 @@ int main(void) {
     for (int i = 0; i < nchunks; i++) {
         _blake3_chunk_state* self = (input_chunks + i);
 
-        uint32_t chaining_value[8];
+        uint32_t chaining_value[16];
         for (int b = 0; b < BLAKE3_BLOCK_CAP; b++) {
             uint32_t block_words[16];
             words_from_little_endian_bytes(self->block + (b*BLAKE3_BLOCK_LEN), BLAKE3_BLOCK_LEN, block_words);
@@ -236,10 +237,28 @@ int main(void) {
         memcpy(compression_outputs[i], chaining_value, sizeof(uint32_t) * 16);
     }
 
+    // TESTING
+    // printf("Compression Outputs: \n");
+    // for (int n = 0; n < nchunks; n++) {
+    //     printf("    chunk %i:", n);
+    //     for (size_t i = 0; i < 16; i++) {
+    //         printf("%02x", compression_outputs[n][i]);
+    //     }
+    //     printf("\n");
+    // }
+
     // creating parent nodes until root is reached
     int on_compression_stack = nchunks;
     uint32_t next_compression_outputs[on_compression_stack][16];
     while (on_compression_stack > 1) {
+        printf("Compression Stack: %i elements\n", on_compression_stack);
+        for (int n = 0; n < on_compression_stack; n++) {
+            printf("    element %i:", n);
+            for (size_t i = 0; i < 16; i++) {
+                printf("%02x", compression_outputs[n][i]);
+            }
+            printf("\n");
+        }
         int next_on_compression_stack = 0;
         if (on_compression_stack % 2) {
             // TODO: the last chunk will not merge to form a parent, just add it to the next outputs
@@ -275,6 +294,12 @@ int main(void) {
     // reached root
     // compression_outputs[0] is the root
     assert(on_compression_stack == 1); // single node which is the root
+    printf("found root: ");
+    for (size_t i = 0; i < 16; i++) {
+        printf("%02x", compression_outputs[0][i]);
+    }
+    printf("\n");
+
     uint64_t output_block_counter = 0;
     size_t out_len = BLAKE3_OUT_LEN;
     uint8_t output[out_len];
