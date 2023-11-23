@@ -9,10 +9,12 @@
 #define CHUNK_START         1 << 0
 #define CHUNK_END           1 << 1
 #define PARENT              1 << 2
+#define ROOT                1 << 3
 #define MAX_CHUNKS          64
 #define BLAKE3_CHUNK_LEN    1024
 #define BLAKE3_BLOCK_LEN    64
 #define BLAKE3_BLOCK_CAP    16
+#define BLAKE3_OUT_LEN      32
 
 typedef struct _blake3_chunk_state {
   uint32_t chaining_value[8];
@@ -184,6 +186,7 @@ int main(void) {
         memcpy(compression_outputs[i], chaining_value, sizeof(uint32_t) * 16);
     }
 
+    // creating parent nodes until root is reached
     int on_compression_stack = nchunks;
     uint32_t next_compression_outputs[on_compression_stack][16];
     while (on_compression_stack > 1) {
@@ -221,23 +224,30 @@ int main(void) {
 
     // reached root
     // compression_outputs[0] is the root
+    assert(on_compression_stack == 1); // single node which is the root
+    uint64_t output_block_counter = 0;
+    size_t out_len = BLAKE3_OUT_LEN;
+    uint8_t output[out_len];
+    uint8_t *out_u8 = output;
 
-    // all input chunks are initialized, use openmp to compress
-    // each chunk in parallel
+    while (out_len > 0) {
+        uint32_t words[16];
+        compress(IV, compression_outputs[0], output_block_counter, BLAKE3_BLOCK_LEN, ROOT, words);
+        for (size_t word = 0; word < 16; word++) {
+            for (int byte = 0; byte < 4; byte++) {
+                if (out_len == 0) { return; }
 
-    // tree depth
+                *out_u8 = (uint8_t)(words[word] >> (8 * byte));
+                out_u8++;
+                out_len--;
+            }
+        }
+    }
 
-    // how to store the output of each chunk / know how to create parents?
-
-    // Finalize the hash.
-    // uint8_t output[BLAKE3_OUT_LEN];
-    // blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
-
-    // Print the hash as hexadecimal.
-    // for (size_t i = 0; i < BLAKE3_OUT_LEN; i++) {
-    //     printf("%02x", output[i]);
-    // }
-    // printf("\n");
+    printf("Output: ");
+    for (size_t i = 0; i < out_len; i++) 
+        printf("%02x", output[i]);
+    printf("\n");
 
     return 0;
 }
