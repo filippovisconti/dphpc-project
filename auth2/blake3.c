@@ -8,6 +8,7 @@
 
 #define CHUNK_START         1 << 0
 #define CHUNK_END           1 << 1
+#define PARENT              1 << 2
 #define MAX_CHUNKS          64
 #define BLAKE3_CHUNK_LEN    1024
 #define BLAKE3_BLOCK_LEN    64
@@ -186,21 +187,40 @@ int main(void) {
     int on_compression_stack = nchunks;
     uint32_t next_compression_outputs[on_compression_stack][16];
     while (on_compression_stack > 1) {
+        int next_on_compression_stack = 0;
         if (on_compression_stack % 2) {
             // TODO: the last chunk will not merge to form a parent, just add it to the next outputs
             memcpy(next_compression_outputs[nchunks/2], compression_outputs[nchunks - 1], sizeof(uint32_t) * 16);
-            on_compression_stack--;
+            next_on_compression_stack++;
         }
 
         // ATTN: should be parallel region
+        assert(on_compression_stack % 2 == 0);
         for (int i = 0; i < on_compression_stack; i+=2) {
             // create parents
-            
+            uint32_t parent_words[16];
+            // left child
+            memcpy(parent_words, compression_outputs[i], sizeof(uint32_t) * 8);
+            // right child
+            memcpy(parent_words[8], compression_outputs[i + 1], sizeof(uint32_t) * 8);
+
+            uint64_t counter   = 0;      // Always 0 for parent nodes.
+            uint32_t flags = PARENT;
+
+            uint32_t out16[16];
+            // TODO: currently the chaining value (ie key words) are just the default hashing mode
+            compress(IV, parent_words, counter, BLAKE3_BLOCK_LEN, flags, out16);
+            memcpy(next_compression_outputs[i/2], out16, sizeof(uint32_t) * 16);
+            next_on_compression_stack++;
         }
+        // ATTN: end parallel region
 
         memcpy(compression_outputs, next_compression_outputs, on_compression_stack * 16 * sizeof(uint32_t));
-        on_compression_stack /= 2;
+        on_compression_stack = next_on_compression_stack;
     }
+
+    // reached root
+    // compression_outputs[0] is the root
 
     // all input chunks are initialized, use openmp to compress
     // each chunk in parallel
