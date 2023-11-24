@@ -300,4 +300,5 @@ pyrightconfig.json
 auth/input_data/
 enc/input_data/
 enc/bin
-enc/output_data/
+enc/output_data/*_out
+enc/output_data/*.png
