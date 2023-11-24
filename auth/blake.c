@@ -252,14 +252,20 @@ inline static void chunk_state_update(
       uint32_t block_words[16];
 
       // convert the block buffer to an array of 16 32-bit words
-      words_from_little_endian_bytes(self->block, BLAKE3_BLOCK_LEN, block_words);
+      words_from_little_endian_bytes(self->block, BLAKE3_BLOCK_LEN,
+                                     block_words);
 
       // init an array of 16 32-bit words to store the output
       uint32_t out16[16];
 
       // run the compress function with
-      compress(self->chaining_value, block_words, self->chunk_counter, BLAKE3_BLOCK_LEN,
-          self->flags | chunk_state_start_flag(self), out16);
+      // printf("flags: %08x\n", self->flags | chunk_state_start_flag(self));
+      // printf("block chaining value: ");
+      // for (size_t i = 0; i < 8; i++) printf("%08x ",
+      // self->chaining_value[i]); printf("\n");
+      compress(self->chaining_value, block_words, self->chunk_counter,
+               BLAKE3_BLOCK_LEN, self->flags | chunk_state_start_flag(self),
+               out16);
       memcpy(self->chaining_value, out16, sizeof(self->chaining_value));
       self->blocks_compressed++;
       memset(self->block, 0, sizeof(self->block));
