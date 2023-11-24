@@ -265,7 +265,7 @@ int main(int argc, char *argv[]) {
         int next_on_compression_stack = 0;
         if (on_compression_stack % 2) {
             // TODO: the last chunk will not merge to form a parent, just add it to the next outputs
-            memcpy(next_compression_outputs[nchunks/2], compression_outputs[nchunks - 1], sizeof(uint32_t) * 16);
+            memcpy(next_compression_outputs[(on_compression_stack - 1)/2], compression_outputs[on_compression_stack - 1], sizeof(uint32_t) * 16);
             on_compression_stack--;
             next_on_compression_stack++;
         }
@@ -339,7 +339,7 @@ int main(int argc, char *argv[]) {
     clock_t end = clock();
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
 
-    printf("time: %.5f\n", time_spent);
+    printf("time: %.3f ms\n", time_spent * 1000);
     for (size_t i = 0; i < BLAKE3_OUT_LEN / sizeof(uint8_t); i++) 
         printf("%02x", output[i]);
     printf("\n");
