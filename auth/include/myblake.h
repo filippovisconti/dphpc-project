@@ -31,13 +31,13 @@
 #define CEIL_DIV(x, y)      ((int)ceil((double)(x) / (y)))
 
 #define PRINT_WITH_NEWLINE(str, n)                                                                 \
-  do {                                                                                             \
-    for (int i = 0; (str)[i] != '\0'; ++i) {                                                       \
-      printf("%c", (str)[i]);                                                                      \
-      if ((i + 1) % (n) == 0) { printf("\n"); }                                                    \
-    }                                                                                              \
-  } while (0)
+    do {                                                                                           \
+        for (int i = 0; (str)[i] != '\0'; ++i) {                                                   \
+            printf("%c", (str)[i]);                                                                \
+            if ((i + 1) % (n) == 0) { printf("\n"); }                                              \
+        }                                                                                          \
+    } while (0)
 
-void myblake(char *filename, uint8_t *output, size_t output_len);
-
+void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, uint8_t *key,
+    const char *derive_key_context);
 #endif

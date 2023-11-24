@@ -27,7 +27,7 @@ void run_test(char *filename) {
     test_blake3(has_key, key, derive_key_context, output_len, input, output_ref);
     fclose(input);
     // printf("************** MY BLAKE3 STOUT *********************\n");
-    myblake(filename, output_my, output_len);
+    myblake(filename, output_my, output_len, has_key, key, derive_key_context);
     // printf("****************************************************\n");
 
     char *output_hex_ref = malloc(output_len * 2 + 1);

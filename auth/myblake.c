@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-uint32_t IV[8] = {
+uint32_t base_IV[8] = {
     0x6A09E667,
     0xBB67AE85,
     0x3C6EF372,
@@ -15,6 +15,8 @@ uint32_t IV[8] = {
     0x1F83D9AB,
     0x5BE0CD19,
 };
+
+uint32_t *IV = base_IV;
 
 size_t MSG_PERMUTATION[16] = {2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8};
 
@@ -198,7 +200,8 @@ static inline int set_num_threads(int num_chunks) {
 }
 
 static inline void compute_chunk_chaining_values(char *read_buffer, int num_blocks,
-    uint64_t counter_t, int chunk, int remaining, bool last_chunk, uint32_t chaining_value[8]) {
+    uint64_t counter_t, int chunk, int remaining, bool last_chunk, uint32_t chaining_value[8],
+    uint32_t base_flags) {
 
     for (int block = 0; block < num_blocks; block++) {
         pad_block_if_necessary(block, num_blocks, remaining, last_chunk, read_buffer);
@@ -207,7 +210,7 @@ static inline void compute_chunk_chaining_values(char *read_buffer, int num_bloc
         int      access_index = (chunk % 4) * BLAKE3_CHUNK_LEN + block * BLAKE3_BLOCK_LEN;
         words_from_little_endian_bytes(&read_buffer[access_index], BLAKE3_BLOCK_LEN, output_blocks);
 
-        uint32_t flags = 0;
+        uint32_t flags = base_flags;
         if (block == 0) flags |= CHUNK_START;
         if ((block % num_blocks) == (num_blocks - 1)) flags |= CHUNK_END;
 
@@ -221,7 +224,18 @@ static inline void compute_chunk_chaining_values(char *read_buffer, int num_bloc
     }
 }
 
-void myblake(char *filename, uint8_t *output, size_t output_len) {
+void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, uint8_t *key,
+    const char *derive_key_context) {
+
+    uint32_t base_flags = 0;
+    if (has_key) {
+        assert(derive_key_context == NULL);
+        (void)key;
+        base_flags = KEYED_HASH;
+    } else if (derive_key_context != NULL) {
+        assert(!has_key);
+        base_flags = DERIVE_KEY_CONTEXT;
+    }
 
     int num_chunks  = get_num_chunks(filename);
     int num_threads = set_num_threads(num_chunks);
@@ -278,7 +292,7 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
                 uint64_t counter_t = chunk + num_leaves * thread_num;
                 uint32_t chaining_value[8];  // store output here
                 compute_chunk_chaining_values(read_buffer, num_blocks, counter_t, chunk, remaining,
-                    last_chunk, chaining_value);
+                    last_chunk, chaining_value, base_flags);
 
                 // save last block's cv for parent processing
                 assert(chunk_counter < (int)num_leaves);
@@ -307,7 +321,7 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
             memcpy(message_words + 8, (&chunk_chaining_values[2 * i + 1]), 32);
 
             uint32_t out16[16];
-            compress(input_chaining_value, message_words, 0, 64, PARENT, out16);
+            compress(input_chaining_value, message_words, 0, 64, PARENT | base_flags, out16);
 
             memcpy(buffer_a + i, out16, sizeof(out16) >> 1);
         }
@@ -325,7 +339,7 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
                 }
 
                 uint32_t out16[16];
-                compress(input_chaining_value, message_words, 0, 64, PARENT, out16);
+                compress(input_chaining_value, message_words, 0, 64, PARENT | base_flags, out16);
 
                 memcpy((a_or_b) ? &buffer_b[i] : &buffer_a[i], out16, sizeof(out16) >> 1);
             }
@@ -346,8 +360,8 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
         free(buffer_b);
     }
     // printf("END PARALLEL REGION\n");
-    int      counter_t = 0;       // always 0 for parent nodes
-    uint32_t flags     = PARENT;  // set parent flag
+    int      counter_t = 0;                    // always 0 for parent nodes
+    uint32_t flags     = PARENT | base_flags;  // set parent flag
 
     // const uint32_t */* input_chaining_value */ = IV;  // input ch val is the
     // keywords
