@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "omp.h"
 uint32_t IV[8] = {
     0x6A09E667,
     0xBB67AE85,
@@ -178,6 +177,7 @@ static inline void write_output(uint32_t message_words[16], uint32_t counter_t, 
 static inline int set_num_threads(int num_chunks) {
 #ifdef USE_OPENMP
     int num_threads = omp_get_max_threads();
+    assert(num_threads > 1);
     // printf("[OMP] Number of available threads: %d\n", num_threads);
     num_threads = 1 << (int)log2(num_threads);  // get largest power of 2 smaller than num_threads
     omp_set_dynamic(0);
@@ -257,7 +257,7 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
         while (!feof(thread_input) && read_size > 0) {
             char  *read_buffer = malloc(4 * CHUNK_SIZE);
             size_t len         = fread(read_buffer, 1, 4 * CHUNK_SIZE, thread_input);
-            if ((len == 0) || (len > (num_leaves << CHUNK_SIZE_LOG)))  break;   // EOF
+            if ((len == 0) || (len > (num_leaves << CHUNK_SIZE_LOG))) break;  // EOF
 
             read_size -= len;
 
@@ -268,7 +268,8 @@ void myblake(char *filename, uint8_t *output, size_t output_len) {
             for (int i = 0; i < num_read_chunks; i++, chunk++) {
                 int  num_blocks = 16;
                 bool last_chunk = false;
-                int  remaining = (len - CHUNK_SIZE * (num_read_chunks - 1));  // 0 <= remainder <= 1024
+                int  remaining  = (len - CHUNK_SIZE * (num_read_chunks - 1));
+                // 0 <= remainder <= 1024
                 if (chunk == (num_read_chunks - 1)) {
                     num_blocks = CEIL_DIV(remaining, BLAKE3_BLOCK_LEN);
                     last_chunk = true;
