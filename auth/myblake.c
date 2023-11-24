@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 uint32_t base_IV[8] = {
     0x6A09E667,
@@ -230,10 +231,19 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
     uint32_t base_flags = 0;
     if (has_key) {
         assert(derive_key_context == NULL);
-        (void)key;
+        IV = malloc(8 * sizeof(uint32_t));
+        words_from_little_endian_bytes(key, BLAKE3_KEY_LEN, IV);
         base_flags = KEYED_HASH;
     } else if (derive_key_context != NULL) {
         assert(!has_key);
+        char fn[] = "tmp.txt";
+        FILE* f = fopen(fn, "w");
+        fwrite(derive_key_context, BLAKE3_KEY_LEN,1,f);
+        fclose(f);
+        uint8_t *context_key_words = malloc(BLAKE3_KEY_LEN);
+        myblake(fn, context_key_words, BLAKE3_KEY_LEN, false, NULL, NULL);
+        IV = malloc(8*sizeof(uint32_t));
+        words_from_little_endian_bytes(context_key_words, BLAKE3_KEY_LEN, IV);
         base_flags = DERIVE_KEY_CONTEXT;
     }
 
