@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <string.h>
 #include <assert.h>
+#include <time.h>
 
 // #include "include/reference_impl.h"
 
@@ -11,28 +12,16 @@
 #define CHUNK_END           1 << 1
 #define PARENT              1 << 2
 #define ROOT                1 << 3
-#define MAX_CHUNKS          64
+#define MAX_CHUNKS          1024
 #define BLAKE3_CHUNK_LEN    1024
 #define BLAKE3_BLOCK_LEN    64
 #define BLAKE3_BLOCK_CAP    16
 #define BLAKE3_OUT_LEN      32
 
-typedef struct _blake3_chunk_state {
-  uint32_t chaining_value[8];
-  uint64_t chunk_counter;
-  char block[BLAKE3_CHUNK_LEN];
-  uint8_t block_len;
-  uint8_t blocks_compressed;
-  uint32_t flags;
-} _blake3_chunk_state;
-
-typedef struct output {
-    uint32_t input_chaining_value[8];
-    uint32_t block_words[16];
-    uint64_t counter;
-    uint32_t block_len;
-    uint32_t flags;
-} output;
+typedef struct chunk_state {
+    char block[BLAKE3_CHUNK_LEN];
+    uint8_t block_len;
+} chunk_state;
 
 static uint32_t IV[8] = {
     0x6A09E667,
@@ -57,19 +46,14 @@ inline static void words_from_little_endian_bytes(
   }
 }
 
-int store_chunks(_blake3_chunk_state* chunks, size_t pos, 
+int store_chunks(chunk_state* chunks, size_t pos, 
                  const void * input, size_t input_len) {
     int counter = 0;
     int bytes_copied = 0;
-    printf("input length: %i\n", input_len);
     while (bytes_copied < input_len) {
-        printf("    chunk_count: %i\n", pos);
-        _blake3_chunk_state* curr_chunk = chunks + pos;
+        chunk_state* curr_chunk = chunks + pos;
         // todo: only works for even blocks
         memcpy(curr_chunk->block, input + bytes_copied, BLAKE3_CHUNK_LEN);
-        memcpy(curr_chunk->chaining_value, IV, 8 * sizeof(uint32_t));
-        curr_chunk->block_len = BLAKE3_BLOCK_LEN;
-        curr_chunk->chunk_counter = pos;
         counter++;
         pos++;
         bytes_copied += BLAKE3_CHUNK_LEN;
@@ -186,7 +170,7 @@ int main(int argc, char *argv[]) {
     // read in file into buffer
     unsigned char buf[65536];
 
-    _blake3_chunk_state* input_chunks = (_blake3_chunk_state*) malloc(MAX_CHUNKS * sizeof(_blake3_chunk_state));
+    chunk_state* input_chunks = (chunk_state*) malloc(MAX_CHUNKS * sizeof(chunk_state));
     size_t nchunks = 0;
 
     // read in file and store chunks in array
@@ -214,11 +198,13 @@ int main(int argc, char *argv[]) {
     //     printf("Chunk %i: %s\n", i, (input_chunks+i)->block);
     // }
 
+    clock_t begin = clock();
+
     // compressing chunks, storing the chaining values
     // ATTN: should be parallel region
     uint32_t compression_outputs[nchunks][16];
     for (int i = 0; i < nchunks; i++) {
-        _blake3_chunk_state* self = (input_chunks + i);
+        chunk_state* self = (input_chunks + i);
 
         uint32_t chaining_value[8];
         for (int b = 0; b < BLAKE3_BLOCK_CAP; b++) {
@@ -234,20 +220,20 @@ int main(int argc, char *argv[]) {
             
             uint32_t out16[16];
             compress(chaining_value, block_words, i, BLAKE3_BLOCK_LEN, flags, out16);
-            printf("Chunk %i, Block %i compression, counter = %i\n, flags = %i", i, b, i, flags);
-            printf("    block words: ");
-            for (size_t i = 0; i < 16; i++) {
-                printf("%02x", block_words[i]);
-            }
-            printf("\n    chaining value: ");
-            for (size_t i = 0; i < 8; i++) {
-                printf("%02x", chaining_value[i]);
-            }
-            printf("\n    out: ");
-            for (size_t i = 0; i < 16; i++) {
-                printf("%02x", out16[i]);
-            }
-            printf("\n");
+            // printf("Chunk %i, Block %i compression, counter = %i\n, flags = %i", i, b, i, flags);
+            // printf("    block words: ");
+            // for (size_t i = 0; i < 16; i++) {
+            //     printf("%02x", block_words[i]);
+            // }
+            // printf("\n    chaining value: ");
+            // for (size_t i = 0; i < 8; i++) {
+            //     printf("%02x", chaining_value[i]);
+            // }
+            // printf("\n    out: ");
+            // for (size_t i = 0; i < 16; i++) {
+            //     printf("%02x", out16[i]);
+            // }
+            // printf("\n");
 
             for (int i = 0; i < 8; i++) chaining_value[i] = out16[i];
         }
@@ -268,14 +254,14 @@ int main(int argc, char *argv[]) {
     int on_compression_stack = nchunks;
     uint32_t next_compression_outputs[on_compression_stack][16];
     while (on_compression_stack > 2) {
-        printf("Compression Stack: %i elements\n", on_compression_stack);
-        for (int n = 0; n < on_compression_stack; n++) {
-            printf("    element %i:", n);
-            for (size_t i = 0; i < 16; i++) {
-                printf("%02x", compression_outputs[n][i]);
-            }
-            printf("\n");
-        }
+        // printf("Compression Stack: %i elements\n", on_compression_stack);
+        // for (int n = 0; n < on_compression_stack; n++) {
+        //     printf("    element %i:", n);
+        //     for (size_t i = 0; i < 16; i++) {
+        //         printf("%02x", compression_outputs[n][i]);
+        //     }
+        //     printf("\n");
+        // }
         int next_on_compression_stack = 0;
         if (on_compression_stack % 2) {
             // TODO: the last chunk will not merge to form a parent, just add it to the next outputs
@@ -323,11 +309,11 @@ int main(int argc, char *argv[]) {
         flags = PARENT;
     }
 
-    printf("found root: ");
-    for (size_t i = 0; i < 16; i++) {
-        printf("%02x", root_words[i]);
-    }
-    printf("\n");
+    // printf("found root: ");
+    // for (size_t i = 0; i < 16; i++) {
+    //     printf("%02x", root_words[i]);
+    // }
+    // printf("\n");
 
     uint64_t output_block_counter = 0;
     size_t out_len = BLAKE3_OUT_LEN;
@@ -337,7 +323,7 @@ int main(int argc, char *argv[]) {
 
     while (out_len > 0) {
         uint32_t words[16];
-        printf("flags: %i\n", flags | ROOT); // ATTN
+        // printf("flags: %i\n", flags | ROOT); // ATTN
         compress(IV, root_words, output_block_counter, BLAKE3_BLOCK_LEN, flags | ROOT, words);
         for (size_t word = 0; word < 16; word++) {
             for (int byte = 0; byte < 4; byte++) {
@@ -350,7 +336,10 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    printf("Output: ");
+    clock_t end = clock();
+    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+
+    printf("time: %.5f\n", time_spent);
     for (size_t i = 0; i < BLAKE3_OUT_LEN / sizeof(uint8_t); i++) 
         printf("%02x", output[i]);
     printf("\n");
