@@ -175,7 +175,6 @@ static inline void write_output(uint32_t message_words[16], uint32_t counter_t, 
         }
     }
 }
-#define USE_OPENMP
 static inline int set_num_threads(int num_chunks) {
 #ifdef USE_OPENMP
     int num_threads = omp_get_max_threads();
