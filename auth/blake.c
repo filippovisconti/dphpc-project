@@ -8,17 +8,12 @@
 #include "reference_impl.h"
 
 static uint32_t IV[8] = {
-    0x6A09E667,
-    0xBB67AE85,
-    0x3C6EF372,
-    0xA54FF53A,
-    0x510E527F,
-    0x9B05688C,
-    0x1F83D9AB,
-    0x5BE0CD19,
+    0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A,
+    0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
 };
 
-static size_t MSG_PERMUTATION[16] = {2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8};
+static size_t MSG_PERMUTATION[16] = {2, 6,  3,  10, 7, 0,  4,  13,
+                                     1, 11, 12, 5,  9, 14, 15, 8};
 
 /**
  * Rotates the bits of a 32-bit unsigned integer to the right by a given number
@@ -91,8 +86,10 @@ inline static void permute(uint32_t m[16]) {
  * @param flags The current flag value.
  * @param out The resulting hash value.
  */
-inline static void compress(const uint32_t chaining_value[8], const uint32_t block_words[16],
-    uint64_t counter, uint32_t block_len, uint32_t flags, uint32_t out[16]) {
+inline static void compress(const uint32_t chaining_value[8],
+                            const uint32_t block_words[16], uint64_t counter,
+                            uint32_t block_len, uint32_t flags,
+                            uint32_t out[16]) {
   uint32_t state[16] = {
       chaining_value[0],
       chaining_value[1],
@@ -155,12 +152,6 @@ inline static void words_from_little_endian_bytes(
   }
 }
 
-/**
- * Outputs the chaining value of the Blake hash function.
- *
- * @param self The output object.
- * @param out The output array to store the chaining value.
- */
 inline static void output_chaining_value(const output *self, uint32_t out[8]) {
   uint32_t out16[16];
   compress(self->input_chaining_value, self->block_words, self->counter, self->block_len,
@@ -537,8 +528,11 @@ void blake3(bool has_key, uint8_t *key, const char *derive_key_context, size_t o
   blake3_hasher_finalize(&hasher, output, output_len);
 
   // Print the hash as hexadecimal.
-  for (size_t i = 0; i < output_len; i++) printf("%02x", output[i]);
+#ifdef ENABLE_PRINT
+  for (size_t i = 0; i < output_len; i++)
+    printf("%02x", output[i]);
   printf("\n");
+#endif
   // free(output);
 }
 
