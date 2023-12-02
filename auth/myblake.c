@@ -6,6 +6,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifndef BENCHMARK
+#define myprintf printf
+#else
+#define myprintf(...) (void)0
+#endif
+
 uint32_t base_IV[8] = {
     0x6A09E667,
     0xBB67AE85,
@@ -129,9 +135,7 @@ static inline void pad_block_if_necessary(
 }
 
 static inline int get_num_chunks(char *filename) {
-#ifdef ENABLE_PRINT
-    printf("using %s\n", filename);
-#endif
+    myprintf("using %s\n", filename);
     FILE *input = fopen(filename, "rb");
     assert(input != NULL);
 
@@ -147,9 +151,7 @@ static inline int get_num_chunks(char *filename) {
 
 static inline void write_output(uint32_t message_words[16], uint32_t counter_t, uint32_t flags,
     uint8_t *output, size_t output_len) {
-#ifdef ENABLE_PRINT
-    printf("output_len: %ld\n", output_len);
-#endif
+    myprintf("output_len: %ld\n", output_len);
     uint8_t *running_output     = output;
     size_t   running_output_len = output_len;
     memset(output, 0, output_len);
@@ -163,9 +165,7 @@ static inline void write_output(uint32_t message_words[16], uint32_t counter_t, 
         for (size_t word = 0; word < 16 && !stop; word++) {
             for (int byte = 0; byte < 4; byte++) {
                 if (output_len == 0 || running_output_len == 0) {
-#ifdef ENABLE_PRINT
-                    printf("FINISHED\n");
-#endif
+                    myprintf("FINISHED\n");
                     stop = true;
                     break;
                 };
@@ -177,22 +177,24 @@ static inline void write_output(uint32_t message_words[16], uint32_t counter_t, 
         }
     }
 }
+// #define USE_OPENMP
 static inline int set_num_threads(int num_chunks) {
 #ifdef USE_OPENMP
     int num_threads = omp_get_max_threads();
     assert(num_threads > 1);
-    // printf("[OMP] Number of available threads: %d\n", num_threads);
+    myprintf("[OMP] Number of available threads: %d\n", num_threads);
     num_threads = 1 << (int)log2(num_threads);  // get largest power of 2 smaller than num_threads
     omp_set_dynamic(0);
-    if (num_chunks > (num_threads << 2))
-        omp_set_num_threads(num_threads);  // each thread handles at least 4 chunks
-    else {
-        num_threads = 2;
-        omp_set_num_threads(num_threads);  // not worth parallelizing, use only one thread
+
+    while (num_threads > (num_chunks >> 3)) {
+        num_threads >>= 1;
+        if (num_threads == 2) break;
+        myprintf("%d %d %d\n", num_threads, num_chunks, num_chunks >> 2);
     }
-    // printf("[OMP] Number of usable threads: %d\n", omp_get_max_threads());
+    omp_set_num_threads(num_threads);  // not worth parallelizing, use only one thread
+    myprintf("[OMP] Number of usable threads: %d\n", omp_get_max_threads());
     assert(omp_get_max_threads() == num_threads);
-    // printf("[OMP] Running with num_threads: %d\n", num_threads);
+    myprintf("[OMP] Running with num_threads: %d\n", num_threads);
 #else
     (void)num_chunks;
     int num_threads = 2;
@@ -236,13 +238,13 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
         base_flags = KEYED_HASH;
     } else if (derive_key_context != NULL) {
         assert(!has_key);
-        char fn[] = "tmp.txt";
-        FILE* f = fopen(fn, "w");
-        fwrite(derive_key_context, BLAKE3_KEY_LEN,1,f);
+        char  fn[] = "tmp.txt";
+        FILE *f    = fopen(fn, "w");
+        fwrite(derive_key_context, BLAKE3_KEY_LEN, 1, f);
         fclose(f);
         uint8_t *context_key_words = malloc(BLAKE3_KEY_LEN);
         myblake(fn, context_key_words, BLAKE3_KEY_LEN, false, NULL, NULL);
-        IV = malloc(8*sizeof(uint32_t));
+        IV = malloc(8 * sizeof(uint32_t));
         words_from_little_endian_bytes(context_key_words, BLAKE3_KEY_LEN, IV);
         base_flags = DERIVE_KEY_CONTEXT;
     }
@@ -378,24 +380,24 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
     uint32_t message_words[16];  // first 8 is left child, second 8 is the right one;
     int      current_number_of_nodes = num_threads;
 
-    uint32_t buffer_a[num_leaves / 2][8];
-    uint32_t buffer_b[num_leaves / 4][8];
-
+    uint32_t(*buffer_a)[8] = calloc(num_leaves / 2, sizeof(uint32_t[8]));
+    uint32_t(*buffer_b)[8] = calloc(num_leaves / 4, sizeof(uint32_t[8]));
+    uint32_t *out16        = malloc(16 * sizeof(uint32_t));
+    assert(out16 != NULL);
     for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
         // we want the first 32 bytes
         memcpy(message_words + 0, (&parent_chaining_values[2 * i + 0]), 32);
         memcpy(message_words + 8, (&parent_chaining_values[2 * i + 1]), 32);
 
-        uint32_t out16[16];
+        // uint32_t out16[16];
         if (current_number_of_nodes <= 2) flags |= ROOT;
         compress(IV, message_words, counter_t, 64, flags, out16);
         // memcpy(buffer_a + i, out16, sizeof(out16) >> 1);
         for (int j = 0; j < 8; j++) buffer_a[i][j] = out16[j];
     }
+    free(out16);
     current_number_of_nodes >>= 1;
-#ifdef ENABLE_PRINT
-    if (current_number_of_nodes == 1) printf("skipping while loop\n");
-#endif
+    if (current_number_of_nodes == 1) myprintf("skipping while loop\n");
 
     uint8_t a_or_b = 1;
     while (current_number_of_nodes > 1) {
@@ -418,15 +420,15 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
         current_number_of_nodes >>= 1;
         a_or_b = !a_or_b;
     }
-
-#ifdef ENABLE_PRINT
+    free(buffer_a);
+    free(buffer_b);
     if (current_number_of_nodes != 1)
-        printf("current_number_of_nodes: %d\n", current_number_of_nodes);
-#endif
+        myprintf("current_number_of_nodes: %d\n", current_number_of_nodes);
     assert(current_number_of_nodes == 1);
 
     counter_t--;
     write_output(message_words, counter_t, flags, output, output_len);
+    if (has_key || derive_key_context != NULL) free(IV);
 }
 
 #if defined MYBLAKE_MAIN

@@ -72,7 +72,7 @@ int main(void) {
     for (size_t size = 0; size < num_sizes; size++) {
         char filename[100];
         sprintf(filename, "%s%s%s", prefix, sizes[size], suffix);
-        printf("[INFO:] Running benchmark for %26s: ", filename);
+        printf("[INFO:] Running test for %26s: ", filename);
         omp_set_num_threads(num_avail_threads);  // e
         run_test(filename);
     }
