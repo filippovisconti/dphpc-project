@@ -1,3 +1,5 @@
+#include "myblake.h"
+
 int blake(char *filename, uint8_t *output, size_t output_len) {
   FILE *input = fopen(filename, "rb");
 

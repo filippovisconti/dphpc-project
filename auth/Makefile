@@ -1,10 +1,11 @@
 FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O3 -march=native -fopenmp
+#-DBENCHMARK
 INCLUDES := -I include -lm
 UNAME := $(shell uname -m)
 CC := gcc
-TEST_SOURCES := myblake.c blake.c quick_test.c
-BLAKE_SOURCES := myblake.c
-BENCHMARK_SOURCES := benchmark.c myblake.c blake.c sha256.c
+TEST_SOURCES := myblake.c blake.c quick_test.c utils.c
+BLAKE_SOURCES := myblake.c utils.c
+BENCHMARK_SOURCES := benchmark.c myblake.c blake.c sha256.c utils.c
 NUM_THREADS := 32
 
 
@@ -12,7 +13,7 @@ ifeq ($(UNAME), arm64)
 CC := gcc-13
 
 test: clean
-	$(CC) $(FLAGS) -g -o test $(TEST_SOURCES) $(INCLUDES)
+	$(CC) $(FLAGS)  -o test $(TEST_SOURCES) $(INCLUDES)
 	./test
 
 test_mp: clean
@@ -20,10 +21,10 @@ test_mp: clean
 	OMP_NUM_THREADS=$(NUM_THREADS) ./test
 
 blake: clean
-	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -g -o blake $(BLAKE_SOURCES) $(INCLUDES)
+	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -o blake $(BLAKE_SOURCES) $(INCLUDES)
 
 blake_mp: clean
-	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -DUSE_OPENMP -g -o blake $(BLAKE_SOURCES) $(INCLUDES)
+	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -DUSE_OPENMP  -o blake $(BLAKE_SOURCES) $(INCLUDES)
 
 run: blake
 	./blake

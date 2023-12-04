@@ -37,6 +37,10 @@ void handle_error() {
 }
 #endif
 
+uint8_t     key[BLAKE3_KEY_LEN] = {0};
+bool        has_key             = false;
+const char *derive_key_context  = NULL;
+
 void run_benchmark_sha(char *filename) {
     FILE *file = fopen(filename, "rb");
     assert(file != NULL);
@@ -50,9 +54,6 @@ void run_benchmark_sha(char *filename) {
 void run_benchmark_ref(char *filename) {
     FILE *file = fopen(filename, "rb");
     assert(file != NULL);
-    uint8_t     key[BLAKE3_KEY_LEN] = {0};
-    bool        has_key             = false;
-    const char *derive_key_context  = NULL;
     uint8_t    *output              = malloc(BLAKE3_OUT_LEN);
 
     // printf("[INFO:] Starting ref BLAKE3 algorithm.. \n");
@@ -69,7 +70,7 @@ void run_benchmark_my(char *filename) {
     uint8_t *output = malloc(BLAKE3_OUT_LEN);
     // printf("[INFO:] Starting my BLAKE3 algorithm.. \n");
     PAPI_REGION_BEGIN("my_blake3");
-    myblake(filename, output, BLAKE3_OUT_LEN);
+    myblake(filename, output, BLAKE3_OUT_LEN, has_key, key, derive_key_context, 0);
     PAPI_REGION_END("my_blake3");
     printf("[INFO:] MY  BLAKE3 done\n");
 

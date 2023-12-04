@@ -12,7 +12,7 @@ def generate_random_text_file(filename, size):
 def main():
     data_sizes = [
         "64_B", "128_B", "156_B", "512_B", "1KB", "2KB", "4KB", "8KB", "32KB",
-        # "64KB", "129KB", "256KB", "512KB",
+        "64KB", "129KB", "256KB", "512KB",
         # "1MB", "2MB", "4MB", "16MB", "32MB", "64MB", "128MB", "256MB", "512MB",
         # "1GB"
     ]
