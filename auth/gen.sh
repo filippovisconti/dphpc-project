@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+# set -x
 
 echo "Generating test data..."
 input="./input_sizes.txt"
@@ -10,22 +11,23 @@ do
   #skip empty lines
   [[ -z "$line" ]] && continue
   #skip line starting with #
-  [[ $line = \#* ]] && echo "Skipping" && continue
+  [[ $line = \#* ]] && echo "Skipping $line" && continue
+
+    # skip if file already exists
+  [[ -f "./input_data/input_$line.txt" ]] && echo "File exists $line" && continue
+
   fsize=$(echo "$line" | grep -o '[0-9]\+')
   unit=$(echo "$line" | grep -o '[a-zA-Z]\+')
   base="1"
   if [ "$unit" = "KB" ]; then
-    fsize=$(($fsize * 1024))
     base="1K"
   elif [ "$unit" = "MB" ]; then
-    fsize=$(($fsize * 1024 * 1024))
     base="1M"
   elif [ "$unit" = "GB" ]; then
-    fsize=$(($fsize * 1024 * 1024 * 1024))
     base="1G"
   fi
 
-  dd if=/dev/urandom of=./input_data/$line bs=$base count=$fsize
+  dd if=/dev/urandom of=./input_data/input_$line.txt bs=$base count=$fsize
 
   echo "$line"
 done < "$input"
