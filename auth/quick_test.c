@@ -31,10 +31,10 @@ void run_test(char *filename, int mode) {
 
     uint8_t *output_ref = malloc(output_len);
     uint8_t *output_my  = malloc(output_len);
-    printf("************** REFERENCE BLAKE3 STOUT **************\n");
+    myprintf("************** REFERENCE BLAKE3 STOUT **************\n");
     blake3(has_key, key, derive_key_context, output_len, input, output_ref);
     fclose(input);
-    printf("************** MY BLAKE3 STOUT *********************\n");
+    myprintf("************** MY BLAKE3 STOUT *********************\n");
     myblake(filename, output_my, output_len, has_key, key, derive_key_context, 0);
     // printf("****************************************************\n");
     free(derive_key_context);
@@ -61,6 +61,10 @@ void run_test(char *filename, int mode) {
         //         printf("GOT: %02x\n", output_my[i]);
         //     }
         // }
+        free(output_ref);
+        free(output_my);
+        free(output_hex_ref);
+        free(output_hex);
         exit(1);
     }
     assert(cond);

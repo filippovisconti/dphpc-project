@@ -130,9 +130,10 @@ int get_num_chunks(char *filename) {
     FILE *input = fopen(filename, "rb");
     assert(input != NULL);
     fseek(input, 0L, SEEK_END);
-    int size = ftell(input);
+    uint64_t size = ftell(input);
+    fclose(input);
 
-    myprintf("input size: %d\n", size);
+    myprintf("input size: %lld\n", size);
     int  num_chunks        = size >> CHUNK_SIZE_LOG;  // divide by 1024
     bool chunks_pow_of_two = (num_chunks & (num_chunks - 1)) == 0;
 

@@ -1,5 +1,5 @@
-FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O3 -march=native -fopenmp
-#-DBENCHMARK
+FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O3 -march=native -fopenmp -g -DBENCHMARK
+#-DDEBUG
 INCLUDES := -I include -lm
 UNAME := $(shell uname -m)
 CC := gcc
@@ -8,17 +8,16 @@ BLAKE_SOURCES := myblake.c utils.c
 BENCHMARK_SOURCES := benchmark.c myblake.c blake.c sha256.c utils.c
 NUM_THREADS := 32
 
-
-ifeq ($(UNAME), arm64)
-CC := gcc-13
-
 test: clean
 	$(CC) $(FLAGS)  -o test $(TEST_SOURCES) $(INCLUDES)
-	./test
+	# ./test
 
 test_mp: clean
 	$(CC) $(FLAGS) -DUSE_OPENMP -o test $(TEST_SOURCES) $(INCLUDES)
 	OMP_NUM_THREADS=$(NUM_THREADS) ./test
+
+ifeq ($(UNAME), arm64)
+CC := gcc-13
 
 blake: clean
 	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -o blake $(BLAKE_SOURCES) $(INCLUDES)
@@ -53,7 +52,7 @@ PAPI_DEBUG := HIGHLEVEL
 PAPI_EXPORT := LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) PAPI_EVENTS="$(PAPI_EVENTS)"
 PAPI_EXPORT += PAPI_OUTPUT_DIRECTORY=$(PAPI_OUTPUT_DIRECTORY) PAPI_DEBUG=${PAPI_DEBUG}
 
-INCLUDES := -I${CPATH} -I include
+INCLUDES := -I${CPATH} -I include -lm
 L := -L${LD_LIBRARY_PATH} -lm -lpapi
 
 blake:
@@ -82,7 +81,7 @@ debug: clean
 	$(CC) $(FLAGS) -ggdb -g -o main $(INCLUDES) -lpapi $(FILES)
 
 clean:
-	rm -fR main benchmark
+	rm -fR main benchmark test slurm-*
 
 endif
 
@@ -94,8 +93,8 @@ gen:
 # set USER to your username
 # run like e.g.: USER=fvisconti make ssh-copy
 REMOTE_HOST := euler
-REMOTE_DIR := /cluster/home/${USER}
-TO_COPY := Makefile *.c include *.json batch_script.sh gen_test_data.sh
+REMOTE_DIR := /cluster/home/${USER}/blake
+TO_COPY := Makefile *.c include *.json *.sh gen.py
 
 ssh-copy:
 	@rsync -avz $(TO_COPY) $(USER)@$(REMOTE_HOST):$(REMOTE_DIR)

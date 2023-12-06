@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -e
 #SBATCH -n 32
 #SBATCH --mem-per-cpu=4000
 #SBATCH --job-name=blake3valgrind

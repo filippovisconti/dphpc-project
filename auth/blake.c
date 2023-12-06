@@ -279,9 +279,6 @@ void blake3_hasher_init_keyed(blake3_hasher *self, const uint8_t key[BLAKE3_KEY_
 
 void blake3_hasher_init_derive_key(blake3_hasher *self, const char *context) {
 
-    printf("\nDEBUG derive_key_context: ");
-    for (size_t i = 0; i < 64; i++) printf("%02x", context[i]);
-    printf("\n");
     blake3_hasher context_hasher;
     hasher_init_internal(&context_hasher, base2_IV, DERIVE_KEY_CONTEXT);
     blake3_hasher_update(&context_hasher, context, strlen(context));
