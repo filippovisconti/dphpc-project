@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-# set -x
+set -x
 
 echo "Generating test data..."
 input="./input_sizes.txt"
@@ -23,7 +23,8 @@ do
   elif [ "$unit" = "MB" ]; then
     base="1M"
   elif [ "$unit" = "GB" ]; then
-    base="1G"
+    base="1M"
+    fsize=$(($fsize * 1024))
   fi
 
   dd if=/dev/urandom of=./input_data/input_$line.txt bs=$base count=$fsize

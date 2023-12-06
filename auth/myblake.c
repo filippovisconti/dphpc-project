@@ -142,8 +142,8 @@ static void short_inputs(
     if (num_chunks == 5) do_later = 1;
     if (num_chunks == 3) do_later = 1;
     size_t index = current_number_of_nodes - 1;
-    printf("starting with current_number_of_nodes: %d\n", current_number_of_nodes);
-    printf("do_later: %d\n", do_later);
+    myprintf("starting with current_number_of_nodes: %d\n", current_number_of_nodes);
+    myprintf("do_later: %d\n", do_later);
 
     for (int i = 0; i < CEIL_DIV(current_number_of_nodes, 2); i++) {
         myprintf("i: %d\n", i);
@@ -155,32 +155,24 @@ static void short_inputs(
         if (i < (current_number_of_nodes >> 1)) {
             compress(IV, message_words, 0, 64, base_flags, out16);
             for (int j = 0; j < 8; j++) buffer_a[i][j] = out16[j];
-        } else {
-            printf("skipping compress\n");
-            // memcpy(buffer_a[2*i], chunk_chaining_values[index], 8 * sizeof(uint32_t));
-        }
+        } else myprintf("skipping compress\n");
     }
-    current_number_of_nodes >>=1;
+    current_number_of_nodes >>= 1;
     // current_number_of_nodes = CEIL_DIV(current_number_of_nodes, 2);  // now we have 3
     // current_number_of_nodes += do_later;
-    printf("***********\nnow current_number_of_nodes: %d\n", current_number_of_nodes);
-    if (current_number_of_nodes  == 1 && do_later) {
+    if (current_number_of_nodes == 1 && do_later) {
         do_later = 0;
         printf("out-copying node %ld at pos %d\n", index, current_number_of_nodes - 1);
-        memcpy(&buffer_a[1], chunk_chaining_values[index], 32);
+        memcpy(&buffer_a[current_number_of_nodes], chunk_chaining_values[index], 32);
         current_number_of_nodes++;
     }
-    printf("before while current_number_of_nodes: %d\n", current_number_of_nodes);
+    uint8_t a_or_b = 1;
     if (current_number_of_nodes == 1) {
-      printf("[DEBUG]  preparing to write output\n");
         write_output(IV, buffer_a[0], 0, base_flags, output, output_len);
     } else {
-        uint8_t a_or_b = 1;
         while (current_number_of_nodes > 1 && ((current_number_of_nodes & 1) == 0)) {
-            printf("while -- %d nodes\n", current_number_of_nodes);
             if (current_number_of_nodes <= 2) base_flags |= ROOT;
-            for (int i = 0; i < ((current_number_of_nodes - do_later) >> 1); i++) {
-                printf("runninggggg.........................\n");
+            for (int i = 0; i < ((current_number_of_nodes) >> 1); i++) {
                 if (a_or_b) {
                     assert(2 * i + 1 < 8);
                     memcpy(message_words + 0, &buffer_a[2 * i][0], 32);
@@ -193,18 +185,30 @@ static void short_inputs(
 
                 compress(IV, message_words, 0, 64, base_flags, out16);
                 memcpy((a_or_b) ? &buffer_b[i] : &buffer_a[i], out16, 16 * sizeof(uint32_t) >> 1);
-                printf(".................................\n");
             }
 
-            a_or_b                  = !a_or_b;
-            current_number_of_nodes = CEIL_DIV(current_number_of_nodes, 2);
+            a_or_b = !a_or_b;
+            current_number_of_nodes >>= 1;
         }
+    }
+    if (do_later) {
+        memcpy(&((a_or_b) ? buffer_a : buffer_b)[1], chunk_chaining_values[index],
+            8 * sizeof(uint32_t));
+
+        if (a_or_b) {
+            memcpy(message_words + 0, &buffer_a[0][0], 32);
+            memcpy(message_words + 8, &buffer_a[1][0], 32);
+        } else {
+            memcpy(message_words + 0, &buffer_b[0][0], 32);
+            memcpy(message_words + 8, &buffer_b[1][0], 32);
+        }
+        printf(".................................\n");
     }
     free(chunk_chaining_values);
     free(out16);
     free(buffer_a);
     free(buffer_b);
-    printf("current_number_of_nodes: %d\n", current_number_of_nodes);
+    myprintf("current_number_of_nodes: %d\n", current_number_of_nodes);
     assert(current_number_of_nodes == 1);
     int counter_t = -1;
     write_output(IV, message_words, counter_t, base_flags, output, output_len);

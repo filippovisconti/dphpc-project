@@ -1,4 +1,5 @@
 #include <stdint.h>
+
 #include "myblake.h"
 
 static uint32_t base_IV[8] = {
@@ -48,8 +49,8 @@ static inline void permute(uint32_t m[16]) {
     for (size_t i = 0; i < 16; i++) { permuted[i] = m[MSG_PERMUTATION[i]]; }
     memcpy(m, permuted, sizeof(permuted));
 }
-void compress(const uint32_t chaining_value[8], const uint32_t block_words[16],
-    uint64_t counter, uint32_t block_len, uint32_t flags, uint32_t out[16]) {
+void compress(const uint32_t chaining_value[8], const uint32_t block_words[16], uint64_t counter,
+    uint32_t block_len, uint32_t flags, uint32_t out[16]) {
     (void)block_len;
     uint32_t state[16] = {
         chaining_value[0],
@@ -91,7 +92,8 @@ void compress(const uint32_t chaining_value[8], const uint32_t block_words[16],
     }
     memcpy(out, state, sizeof(state));
 #ifdef DEBUG
-    printf("Ch val:\n    ");
+    printf("flags:   %08x, counter %lld\n", flags, counter);
+    printf("Ch val:  ");
     for (size_t i = 0; i < 8; i++) printf("%08x ", chaining_value[i]);
     printf("\n");
     printf("Block: %d \n", block_len);
@@ -99,18 +101,16 @@ void compress(const uint32_t chaining_value[8], const uint32_t block_words[16],
     printf("\n");
     for (size_t i = 8; i < 16; i++) printf("%08x ", block_words[i]);
     printf("\n");
-    printf("flags: %08x, counter %lld\n", flags, counter);
     // printf("IV: ");
     // for (size_t i = 0; i < 4; i++) printf("%08x ", IV[i]);
     // printf("\n");
-    printf("Out:   ");
+    printf("Out:     ");
     for (size_t i = 0; i < 8; i++) printf("%08x ", out[i]);
     printf("\n-------\n");
 #endif
 }
 
-void words_from_little_endian_bytes(
-    const void *bytes, size_t bytes_len, uint32_t *out) {
+void words_from_little_endian_bytes(const void *bytes, size_t bytes_len, uint32_t *out) {
     assert(bytes_len % 4 == 0);
     const uint8_t *u8_ptr = (const uint8_t *)bytes;
     for (size_t i = 0; i < (bytes_len / 4); i++) {
@@ -137,11 +137,11 @@ int get_num_chunks(char *filename) {
     int  num_chunks        = size >> CHUNK_SIZE_LOG;  // divide by 1024
     bool chunks_pow_of_two = (num_chunks & (num_chunks - 1)) == 0;
 
-    assert(chunks_pow_of_two || num_chunks < 8);
+    if (!chunks_pow_of_two) exit(0);
     return MAX(num_chunks, 1);
 }
 
-void write_output(uint32_t* int_IV, uint32_t message_words[16], uint32_t counter_t, uint32_t flags,
+void write_output(uint32_t *int_IV, uint32_t message_words[16], uint32_t counter_t, uint32_t flags,
     uint8_t *output, size_t output_len) {
     uint8_t *running_output     = output;
     size_t   running_output_len = output_len;
@@ -151,6 +151,7 @@ void write_output(uint32_t* int_IV, uint32_t message_words[16], uint32_t counter
     bool stop = false;
     while (running_output_len > 0) {
         uint32_t words[16];
+        myprintf("write_output\n");
         compress(int_IV, message_words, ++counter_t, 64, flags, words);
 
         stop = false;
@@ -199,9 +200,8 @@ int set_num_threads(int num_chunks) {
     return num_threads;
 }
 
-void compute_chunk_chaining_values(uint32_t* int_IV, char *read_buffer, int num_blocks,
-    uint64_t counter_t, int chunk,  uint32_t chaining_value[8],
-    uint32_t base_flags) {
+void compute_chunk_chaining_values(uint32_t *int_IV, char *read_buffer, int num_blocks,
+    uint64_t counter_t, int chunk, uint32_t chaining_value[8], uint32_t base_flags) {
 
     for (int block = 0; block < num_blocks; block++) {
         // pad_block_if_necessary(block, num_blocks, remaining, last_chunk, read_buffer);
