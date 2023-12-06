@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <strings.h>
 
 static uint32_t base_IV[8] = {
     0x6A09E667,
@@ -22,7 +23,7 @@ static void short_inputs(
     FILE *input = fopen(filename, "rb");
     assert(input != NULL);
 
-    uint32_t(*chunk_chaining_values)[8] = calloc(num_chunks, sizeof(uint32_t[8]));
+    uint32_t(*chunk_chaining_values)[8] = calloc(8, sizeof(uint32_t[8]));
     assert(chunk_chaining_values != NULL);
 
     uint32_t output_blocks[16];
@@ -35,9 +36,6 @@ static void short_inputs(
     assert(len != 0);
     fclose(input);
 
-    // if ((len & 63) != 0) len = next_multiple_of_64(len);
-    // assert((len & 63) == 0);
-
     int num_read_chunks = CEIL_DIV(len, CHUNK_SIZE);
     assert(num_read_chunks <= 8);
 
@@ -47,7 +45,7 @@ static void short_inputs(
     for (int i = 0; i < num_read_chunks; i++, chunk++) {
         int num_blocks = 16;
         remaining      = (len - CHUNK_SIZE * (num_read_chunks - 1));  // 0 <= remainder <= 1024
-        myprintf("\tremaining: %d\n", remaining);
+        // myprintf("\tremaining: %d\n", remaining);
         if (chunk == (num_read_chunks - 1)) {
             num_blocks = CEIL_DIV(remaining, BLAKE3_BLOCK_LEN);
             myprintf("num_blocks: %d\n", num_blocks);
@@ -60,7 +58,7 @@ static void short_inputs(
             words_from_little_endian_bytes(
                 &read_buffer[access_index], BLAKE3_BLOCK_LEN, output_blocks);
 
-            myprintf("\tremaining: %d\n", remaining);
+            // myprintf("\tremaining: %d\n", remaining);
             uint32_t flags = base_flags;
             if (block == 0) flags |= CHUNK_START;
             if ((block % num_blocks) == (num_blocks - 1)) flags |= CHUNK_END;
@@ -87,7 +85,7 @@ static void short_inputs(
         myprintf("chunk_counter: %d\n", chunk_counter);
     }
     free(read_buffer);
-
+    myprintf("Finished calculating initial ch vals\n");
     if (remaining == 0) remaining = BLAKE3_BLOCK_LEN;
 
     if (num_chunks == 1) {
@@ -137,49 +135,76 @@ static void short_inputs(
     assert(buffer_a != NULL);
     assert(buffer_b != NULL);
     assert(out16 != NULL);
+    // if num_chunks is not a power of 2, we have to do one more iteration
+    int do_later = 0;
+    if (num_chunks == 7) do_later = 1;
+    if (num_chunks == 6) do_later = 2;
+    if (num_chunks == 5) do_later = 1;
+    if (num_chunks == 3) do_later = 1;
+    size_t index = current_number_of_nodes - 1;
+    printf("starting with current_number_of_nodes: %d\n", current_number_of_nodes);
+    printf("do_later: %d\n", do_later);
 
-    for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
+    for (int i = 0; i < CEIL_DIV(current_number_of_nodes, 2); i++) {
+        myprintf("i: %d\n", i);
         memcpy(message_words + 0, (&chunk_chaining_values[2 * i + 0]), 32);
         memcpy(message_words + 8, (&chunk_chaining_values[2 * i + 1]), 32);
 
         base_flags |= PARENT;
         if (current_number_of_nodes <= 2) base_flags |= ROOT;
-        compress(IV, message_words, 0, 64, base_flags, out16);
-
-        for (int j = 0; j < 8; j++) buffer_a[i][j] = out16[j];
+        if (i < (current_number_of_nodes >> 1)) {
+            compress(IV, message_words, 0, 64, base_flags, out16);
+            for (int j = 0; j < 8; j++) buffer_a[i][j] = out16[j];
+        } else {
+            printf("skipping compress\n");
+            // memcpy(buffer_a[2*i], chunk_chaining_values[index], 8 * sizeof(uint32_t));
+        }
     }
-
-    current_number_of_nodes >>= 1;
-    free(chunk_chaining_values);
-    if (current_number_of_nodes == 1)
+    current_number_of_nodes >>=1;
+    // current_number_of_nodes = CEIL_DIV(current_number_of_nodes, 2);  // now we have 3
+    // current_number_of_nodes += do_later;
+    printf("***********\nnow current_number_of_nodes: %d\n", current_number_of_nodes);
+    if (current_number_of_nodes  == 1 && do_later) {
+        do_later = 0;
+        printf("out-copying node %ld at pos %d\n", index, current_number_of_nodes - 1);
+        memcpy(&buffer_a[1], chunk_chaining_values[index], 32);
+        current_number_of_nodes++;
+    }
+    printf("before while current_number_of_nodes: %d\n", current_number_of_nodes);
+    if (current_number_of_nodes == 1) {
+      printf("[DEBUG]  preparing to write output\n");
         write_output(IV, buffer_a[0], 0, base_flags, output, output_len);
-    else {
+    } else {
         uint8_t a_or_b = 1;
-        while (current_number_of_nodes > 1) {
+        while (current_number_of_nodes > 1 && ((current_number_of_nodes & 1) == 0)) {
+            printf("while -- %d nodes\n", current_number_of_nodes);
             if (current_number_of_nodes <= 2) base_flags |= ROOT;
-            int do_later = current_number_of_nodes & 1;
             for (int i = 0; i < ((current_number_of_nodes - do_later) >> 1); i++) {
+                printf("runninggggg.........................\n");
                 if (a_or_b) {
-                    assert(2 * i + 1 < num_chunks / 2);
+                    assert(2 * i + 1 < 8);
                     memcpy(message_words + 0, &buffer_a[2 * i][0], 32);
                     memcpy(message_words + 8, &buffer_a[2 * i + 1][0], 32);
                 } else {
-                    assert(2 * i + 1 < num_chunks / 4);
+                    assert(2 * i + 1 < 8);
                     memcpy(message_words + 0, &buffer_b[2 * i][0], 32);
                     memcpy(message_words + 8, &buffer_b[2 * i + 1][0], 32);
                 }
 
                 compress(IV, message_words, 0, 64, base_flags, out16);
-                memcpy((a_or_b) ? &buffer_b[i] : &buffer_a[i], out16, sizeof(out16) >> 1);
+                memcpy((a_or_b) ? &buffer_b[i] : &buffer_a[i], out16, 16 * sizeof(uint32_t) >> 1);
+                printf(".................................\n");
             }
-            current_number_of_nodes >>= 1 + do_later;
-            a_or_b = !a_or_b;
+
+            a_or_b                  = !a_or_b;
+            current_number_of_nodes = CEIL_DIV(current_number_of_nodes, 2);
         }
     }
+    free(chunk_chaining_values);
     free(out16);
     free(buffer_a);
     free(buffer_b);
-
+    printf("current_number_of_nodes: %d\n", current_number_of_nodes);
     assert(current_number_of_nodes == 1);
     int counter_t = -1;
     write_output(IV, message_words, counter_t, base_flags, output, output_len);
@@ -367,6 +392,8 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
     uint32_t(*buffer_a)[8] = calloc(num_leaves / 2, sizeof(uint32_t[8]));
     uint32_t(*buffer_b)[8] = calloc(num_leaves / 4, sizeof(uint32_t[8]));
     uint32_t *out16        = malloc(16 * sizeof(uint32_t));
+    assert(buffer_a != NULL);
+    assert(buffer_b != NULL);
     assert(out16 != NULL);
     for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
         // we want the first 32 bytes
