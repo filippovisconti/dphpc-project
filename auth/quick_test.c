@@ -73,28 +73,49 @@ void run_test(char *filename, int mode) {
     free(output_my);
     free(output_hex_ref);
     free(output_hex);
-
 }
 
 int main(void) {
-    char  prefix[] = "input_data/input_";
-    char  suffix[] = ".txt";
-    char *sizes[]  = {"64_B", "128_B", "156_B", "512_B", "1KB", "2KB", "3KB",
-         "4KB",  // "5KB", "6KB",
-         /* "7KB", */ "8KB", "32KB", "64KB",
-         /*  "129KB",  */ "256KB", "512KB", "1MB", "2MB", "4MB", "16MB", "32MB", "64MB", "128MB",
-         "256MB", "512MB", "1GB"};  //, "2GB", "4GB", "8GB"};
+    char prefix[] = "input_data/input_";
+    char suffix[] = ".txt";
+    char sizes[50][10];  // Assuming a maximum of 50 entries with a maximum size of 10 characters
 
-    size_t num_sizes         = 20;
-    int    num_avail_threads = omp_get_max_threads();
+    // Read sizes from file
+    FILE *sizesFile = fopen("input_sizes.txt", "r");
+    assert(sizesFile != NULL);
+
+    size_t num_sizes = 0;
+    while (num_sizes < 50 && fscanf(sizesFile, "%9s", sizes[num_sizes]) == 1) {
+        // Skip lines starting with '#'
+        if (sizes[num_sizes][0] == '#') {
+            // Read and discard the rest of the line
+            while (fgetc(sizesFile) != '\n' && !feof(sizesFile)) {
+                // Do nothing, just consume characters until the end of the line
+            }
+        } else num_sizes++;
+    }
+
+    fclose(sizesFile);
+
+    int num_avail_threads = omp_get_max_threads();
     omp_set_dynamic(0);
     for (int mode = 0; mode < 3; mode++)
         for (size_t size = 0; size < num_sizes; size++) {
-            char filename[100];
-            sprintf(filename, "%s%s%s", prefix, sizes[size], suffix);
+            char *filename = malloc(strlen(prefix) + strlen(sizes[size]) + strlen(suffix) + 1);
+            assert(filename != NULL);
+
+            strcpy(filename, prefix);
+            strcat(filename, sizes[size]);
+            strcat(filename, suffix);
+            // Check if the file exists
+            if (access(filename, F_OK) == -1) {
+                printf("[INFO:] Skipping test for %25s (File not found)\n", filename);
+                continue;
+            }
             printf("[INFO:] Running test for %26s: ", filename);
             omp_set_num_threads(num_avail_threads);  // e
             run_test(filename, mode);
+            free(filename);
         }
 
     return EXIT_SUCCESS;

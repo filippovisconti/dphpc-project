@@ -6,6 +6,7 @@
 #include "reference_impl.h"
 #include "sha256.h"
 
+#define REPETITIONS 15
 #ifdef USE_PAPI
 #include <papi.h>
 #endif
@@ -54,7 +55,7 @@ void run_benchmark_sha(char *filename) {
 void run_benchmark_ref(char *filename) {
     FILE *file = fopen(filename, "rb");
     assert(file != NULL);
-    uint8_t    *output              = malloc(BLAKE3_OUT_LEN);
+    uint8_t *output = malloc(BLAKE3_OUT_LEN);
 
     // printf("[INFO:] Starting ref BLAKE3 algorithm.. \n");
     file = fopen(filename, "r");
@@ -81,18 +82,31 @@ int main(void) {
     endianCheckPrint();
     char prefix[] = "input_data/input_";
     char suffix[] = ".txt";
+    char sizes[50][10];  // Assuming a maximum of 50 entries with a maximum size of 10 characters
 
-    size_t num_sizes = 14;
-    char  *sizes[]   = {"8KB", "32KB", "64KB", /*  "128KB", */ "512KB", "1MB", "2MB", "4MB", "16MB",
-           "32MB", "64MB", "128MB", "256MB", "512MB", "1GB"};  //, "4GB", "8GB"};
-    int    repetitions = 15;
+    // Read sizes from file
+    FILE *sizesFile = fopen("input_sizes.txt", "r");
+    assert(sizesFile != NULL);
 
+    size_t num_sizes = 0;
+    while (num_sizes < 50 && fscanf(sizesFile, "%9s", sizes[num_sizes]) == 1) {
+        // Skip lines starting with '#'
+        if (sizes[num_sizes][0] == '#') {
+            // Read and discard the rest of the line
+            while (fgetc(sizesFile) != '\n' && !feof(sizesFile)) {
+                // Do nothing, just consume characters until the end of the line
+            }
+        } else num_sizes++;
+    }
+
+    fclose(sizesFile);
+
+#ifdef USE_OPENMP
     int num_avail_threads = omp_get_max_threads();
-    printf("[INFO:] Max number of threads: %d\n", num_avail_threads);
     omp_set_dynamic(0);
-
+    printf("[INFO:] Max number of threads: %d\n", num_avail_threads);
     for (size_t size = 0; size < num_sizes; size++) {
-        for (int i = 0; i < repetitions; i++) {
+        for (int i = 0; i < REPETITIONS; i++) {
             char filename[100];
             sprintf(filename, "%s%s%s", prefix, sizes[size], suffix);
             printf("[INFO:] Running benchmark for %s, %d\n", sizes[size], i);
@@ -100,8 +114,17 @@ int main(void) {
             run_benchmark_my(filename);
         }
     }
+#else
     for (size_t size = 0; size < num_sizes; size++) {
-        for (int i = 0; i < repetitions; i++) {
+        for (int i = 0; i < REPETITIONS; i++) {
+            char filename[100];
+            sprintf(filename, "%s%s%s", prefix, sizes[size], suffix);
+            printf("[INFO:] Running benchmark for %s, %d\n", sizes[size], i);
+            run_benchmark_my(filename);
+        }
+    }
+    for (size_t size = 0; size < num_sizes; size++) {
+        for (int i = 0; i < REPETITIONS; i++) {
             char filename[100];
             sprintf(filename, "%s%s%s", prefix, sizes[size], suffix);
             printf("[INFO:] Running ref benchmark for %s, %d\n", sizes[size], i);
@@ -109,12 +132,13 @@ int main(void) {
         }
     }
     for (size_t size = 0; size < num_sizes; size++) {
-        for (int i = 0; i < repetitions; i++) {
+        for (int i = 0; i < REPETITIONS; i++) {
             char filename[100];
             sprintf(filename, "%s%s%s", prefix, sizes[size], suffix);
             printf("[INFO:] Running sha benchmark for %s, %d\n", sizes[size], i);
             run_benchmark_sha(filename);
         }
     }
+#endif
     return 0;
 }

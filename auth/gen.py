@@ -10,17 +10,17 @@ def generate_random_text_file(filename, size):
 
 
 def main():
-    data_sizes = [
-        "64_B", "128_B", "156_B", "512_B", "1KB", "2KB", "4KB", "8KB", "32KB",
-        "64KB", "129KB", "256KB", "512KB",
-        # "1MB", "2MB", "4MB", "16MB", "32MB", "64MB", "128MB", "256MB", "512MB",
-        # "1GB"
-    ]
+    with open("input_data_sizes.txt", 'r') as file:
+        data_sizes = file.read().splitlines()
 
     output_dir = "input_data"
     os.makedirs(output_dir, exist_ok=True)
 
     for size_str in data_sizes:
+        if size_str.startswith("#"):
+            print(f"Skipping {size_str}...commented out")
+            continue
+
         print(f"Generating {size_str} file...")
         size = int(size_str[:-2])  # Extract the numeric part
         unit = size_str[-2:]  # Extract the unit (KB, MB, GB)
@@ -33,6 +33,9 @@ def main():
             size *= 1024 * 1024 * 1024
 
         filename = os.path.join(output_dir, f'input_{size_str}.txt')
+        if os.path.exists(filename):
+            print(f"Skipping {filename}... already exists.")
+            continue
         generate_random_text_file(filename, size)
 
 
