@@ -12,8 +12,7 @@ do
   [[ -z "$line" ]] && continue
   #skip line starting with #
   [[ $line = \#* ]] && echo "Skipping $line" && continue
-
-    # skip if file already exists
+  # skip if file already exists
   [[ -f "./input_data/input_$line.txt" ]] && echo "File exists $line" && continue
 
   fsize=$(echo "$line" | grep -o '[0-9]\+')

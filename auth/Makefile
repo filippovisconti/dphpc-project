@@ -94,7 +94,7 @@ gen:
 # run like e.g.: USER=fvisconti make ssh-copy
 REMOTE_HOST := euler
 REMOTE_DIR := /cluster/home/${USER}/blake
-TO_COPY := Makefile *.c include *.json *.sh gen.py
+TO_COPY := Makefile *.c include *.json *.sh gen.py input_sizes.txt
 
 ssh-copy:
 	@rsync -avz $(TO_COPY) $(USER)@$(REMOTE_HOST):$(REMOTE_DIR)
