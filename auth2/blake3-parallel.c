@@ -13,7 +13,7 @@
 #define CHUNK_END           1 << 1
 #define PARENT              1 << 2
 #define ROOT                1 << 3
-#define MAX_CHUNKS          1024
+#define MAX_CHUNKS          2048
 #define BLAKE3_CHUNK_LEN    1024
 #define BLAKE3_BLOCK_LEN    64
 #define BLAKE3_BLOCK_CAP    16
@@ -206,6 +206,8 @@ int main(int argc, char *argv[]) {
     // compressing chunks, storing the chaining values
     // ATTN: should be parallel region
     uint32_t compression_outputs[nchunks][CACHE_LINE_SIZE / sizeof(uint32_t)];
+    // TODO: try false sharing and see if there is slow down
+    // TODO: remove the memcpy, just switch pointers back and forth
     #pragma omp parallel for
     for (int i = 0; i < nchunks; i++) {
         // int nthread = omp_get_thread_num();
@@ -226,25 +228,21 @@ int main(int argc, char *argv[]) {
             
             uint32_t out16[16];
             compress(chaining_value, block_words, i, BLAKE3_BLOCK_LEN, flags, out16);
-            // printf("Chunk %i, Block %i compression, counter = %i\n, flags = %i", i, b, i, flags);
-            // printf("    block words: ");
-            // for (size_t i = 0; i < 16; i++) {
-            //     printf("%02x", block_words[i]);
-            // }
-            // printf("\n    chaining value: ");
-            // for (size_t i = 0; i < 8; i++) {
-            //     printf("%02x", chaining_value[i]);
-            // }
-            // printf("\n    out: ");
-            // for (size_t i = 0; i < 16; i++) {
-            //     printf("%02x", out16[i]);
-            // }
-            // printf("\n");
-
             for (int i = 0; i < 8; i++) chaining_value[i] = out16[i];
         }
-        memcpy(compression_outputs[i], chaining_value, sizeof(uint32_t) * 16);
+
+        //todo: iteration instead of memcpy?
+        // vectorization speed up possible here
+        for (int j = 0; j < 8; j++) compression_outputs[i][j] = chaining_value[j];
+        // memcpy(compression_outputs[i], chaining_value, sizeof(uint32_t) * 16);
     }
+
+    clock_t end = clock();
+    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+
+    printf("compression time: %.3f ms\n", time_spent * 1000);
+
+    begin = clock();
 
     // TESTING
     // printf("Compression Outputs: \n");
@@ -258,7 +256,7 @@ int main(int argc, char *argv[]) {
 
     // creating parent nodes until root is reached
     int on_compression_stack = nchunks;
-    uint32_t next_compression_outputs[on_compression_stack][16];
+    uint32_t next_compression_outputs[on_compression_stack][CACHE_LINE_SIZE / sizeof(u_int32_t)];
     while (on_compression_stack > 2) {
         // printf("Compression Stack: %i elements\n", on_compression_stack);
         // for (int n = 0; n < on_compression_stack; n++) {
@@ -287,12 +285,9 @@ int main(int argc, char *argv[]) {
             // right child
             memcpy(parent_words + 8, compression_outputs[i + 1], sizeof(uint32_t) * 8);
 
-            uint64_t counter   = 0;      // Always 0 for parent nodes.
-            uint32_t flags = PARENT;
-
             uint32_t out16[16];
             // TODO: currently the chaining value (ie key words) are just the default hashing mode
-            compress(IV, parent_words, counter, BLAKE3_BLOCK_LEN, flags, out16);
+            compress(IV, parent_words, 0, BLAKE3_BLOCK_LEN, PARENT, out16);
             memcpy(next_compression_outputs[i/2], out16, sizeof(uint32_t) * 16);
             next_on_compression_stack++;
         }
@@ -343,10 +338,10 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    clock_t end = clock();
-    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+    end = clock();
+    time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
 
-    printf("time: %.3f ms\n", time_spent * 1000);
+    printf("root calculation time: %.3f ms\n", time_spent * 1000);
     for (size_t i = 0; i < BLAKE3_OUT_LEN / sizeof(uint8_t); i++) 
         printf("%02x", output[i]);
     printf("\n");
