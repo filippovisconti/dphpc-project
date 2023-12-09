@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <sys/types.h>
+#include <stdbool.h>
 #include <errno.h>
 #include <string.h>
 #include <assert.h>
@@ -13,7 +15,10 @@
 #define CHUNK_END           1 << 1
 #define PARENT              1 << 2
 #define ROOT                1 << 3
-#define MAX_CHUNKS          2048
+#define KEYED_HASH          1 << 4
+#define DERIVE_KEY_CONTEXT  1 << 5
+#define DERIVE_KEY_MATERIAL 1 << 6
+#define MAX_CHUNKS          2097152
 #define BLAKE3_CHUNK_LEN    1024
 #define BLAKE3_BLOCK_LEN    64
 #define BLAKE3_BLOCK_CAP    16
@@ -22,7 +27,6 @@
 
 typedef struct chunk_state {
     char block[BLAKE3_CHUNK_LEN];
-    uint8_t block_len;
 } chunk_state;
 
 static uint32_t IV[8] = {
@@ -146,31 +150,13 @@ inline static void compress(const uint32_t chaining_value[8], const uint32_t blo
   memcpy(out, state, sizeof(state));
 }
 
-int main(int argc, char *argv[]) {
-    // uint8_t key[BLAKE3_KEY_LEN];
-    // bool has_key = false;
-    // const char *derive_key_context = NULL;
-    if (argc <= 1) return 1;
-    char* test_file = argv[1];
-    if (argc == 3) omp_set_num_threads(atoi(argv[2]));
-
-    // char filename[] = test_file;
+void blake3_parallel(char* test_file, bool has_key, uint32_t* key, uint32_t* key_context) {
     FILE *input_stream = fopen(test_file, "rb");
     if (input_stream == NULL) {
         printf("Can't open file\n");
         exit(1);
     }
 
-    // // there are 3 options to init: running with key, deriving key, no key
-    // if (has_key) {
-    //     blake3_hasher_init_keyed(&hasher, key);
-    // } else if (derive_key_context != NULL) {
-    //     blake3_hasher_init_derive_key(&hasher, derive_key_context);
-    // } else {
-    //     blake3_hasher_init(&hasher);
-    // }
-
-    // read in file into buffer
     unsigned char buf[65536];
 
     chunk_state* input_chunks = (chunk_state*) malloc(MAX_CHUNKS * sizeof(chunk_state));
@@ -190,52 +176,59 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
     }
-    // TODO: set chunk_start and chunk_end flags?
 
-    // TESTING
-    // for (size_t i = 0; i < nchunks; i++) {
-    //     char Chunk[BLAKE3_CHUNK_LEN + 1];
-    //     Chunk[BLAKE3_CHUNK_LEN] = '\0';
-    //     memcpy(Chunk, (input_chunks+i)->block, BLAKE3_CHUNK_LEN);
-
-    //     printf("Chunk %i: %s\n", i, (input_chunks+i)->block);
-    // }
+    fclose(input_stream);
 
     clock_t begin = clock();
 
-    // compressing chunks, storing the chaining values
-    // ATTN: should be parallel region
+    uint32_t* master_chaining_value;
+    uint32_t master_flags = 0;
+    // // there are 3 options to init: running with key, deriving key, no key
+    if (has_key) {
+        master_flags |= KEYED_HASH;
+        // blake3_hasher_init_keyed(&hasher, key);
+    } else if (key_context != NULL) {
+        master_flags |= DERIVE_KEY_CONTEXT;
+        // TODO: compress the context string
+        // set chaining value to the first 8 bytes of that output^
+        master_flags = DERIVE_KEY_MATERIAL;
+        // TODO: compress the key material with that chaining value^
+    } else {
+        master_chaining_value = IV;
+    }
+
     uint32_t compression_outputs[nchunks][CACHE_LINE_SIZE / sizeof(uint32_t)];
-    // TODO: try false sharing and see if there is slow down
-    // TODO: remove the memcpy, just switch pointers back and forth
     #pragma omp parallel for
     for (int i = 0; i < nchunks; i++) {
         // int nthread = omp_get_thread_num();
         // printf("chunk %i handled by %i thread\n", i, nthread);
         chunk_state* self = (input_chunks + i);
 
-        uint32_t chaining_value[8];
+        // uint32_t* chaining_value;
+        uint32_t* chaining_value;
         for (int b = 0; b < BLAKE3_BLOCK_CAP; b++) {
             uint32_t block_words[16];
             words_from_little_endian_bytes(self->block + (b*BLAKE3_BLOCK_LEN), BLAKE3_BLOCK_LEN, block_words);
             
-            uint32_t flags = 0;
+            uint32_t flags = master_flags;
             if (b == 0) {
-                memcpy(chaining_value, IV, 8 * sizeof(uint32_t));
-                flags = CHUNK_START;
+                chaining_value = master_chaining_value;
+                // memcpy(chaining_value, IV, 8 * sizeof(uint32_t));
+                flags |= CHUNK_START;
             }
             if (b == BLAKE3_BLOCK_CAP - 1) flags = CHUNK_END;
             
             uint32_t out16[16];
             compress(chaining_value, block_words, i, BLAKE3_BLOCK_LEN, flags, out16);
-            for (int i = 0; i < 8; i++) chaining_value[i] = out16[i];
+            chaining_value = out16;
+            // for (int i = 0; i < 8; i++) chaining_value[i] = out16[i];
         }
 
-        //todo: iteration instead of memcpy?
-        // vectorization speed up possible here
-        for (int j = 0; j < 8; j++) compression_outputs[i][j] = chaining_value[j];
-        // memcpy(compression_outputs[i], chaining_value, sizeof(uint32_t) * 16);
+        // todo: vectorization speed up possible here
+        for (int j = 0; j < 8; j++) compression_outputs[i][j] = *(chaining_value + j);
     }
+
+    free(input_chunks);
 
     clock_t end = clock();
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
@@ -244,37 +237,17 @@ int main(int argc, char *argv[]) {
 
     begin = clock();
 
-    // TESTING
-    // printf("Compression Outputs: \n");
-    // for (int n = 0; n < nchunks; n++) {
-    //     printf("    chunk %i:", n);
-    //     for (size_t i = 0; i < 16; i++) {
-    //         printf("%02x", compression_outputs[n][i]);
-    //     }
-    //     printf("\n");
-    // }
-
     // creating parent nodes until root is reached
     int on_compression_stack = nchunks;
-    uint32_t next_compression_outputs[on_compression_stack][CACHE_LINE_SIZE / sizeof(u_int32_t)];
+    uint32_t next_compression_outputs[on_compression_stack][CACHE_LINE_SIZE / sizeof(uint32_t)];
     while (on_compression_stack > 2) {
-        // printf("Compression Stack: %i elements\n", on_compression_stack);
-        // for (int n = 0; n < on_compression_stack; n++) {
-        //     printf("    element %i:", n);
-        //     for (size_t i = 0; i < 16; i++) {
-        //         printf("%02x", compression_outputs[n][i]);
-        //     }
-        //     printf("\n");
-        // }
         int next_on_compression_stack = 0;
         if (on_compression_stack % 2) {
-            // TODO: the last chunk will not merge to form a parent, just add it to the next outputs
             memcpy(next_compression_outputs[on_compression_stack/2], compression_outputs[on_compression_stack - 1], sizeof(uint32_t) * 16);
             on_compression_stack--;
             next_on_compression_stack++;
         }
 
-        // ATTN: should be parallel region
         assert(on_compression_stack % 2 == 0);
         #pragma omp parallel for reduction(+ : next_on_compression_stack)
         for (int i = 0; i < on_compression_stack; i+=2) {
@@ -291,14 +264,11 @@ int main(int argc, char *argv[]) {
             memcpy(next_compression_outputs[i/2], out16, sizeof(uint32_t) * 16);
             next_on_compression_stack++;
         }
-        // ATTN: end parallel region
 
         memcpy(compression_outputs, next_compression_outputs, on_compression_stack * 16 * sizeof(uint32_t));
         on_compression_stack = next_on_compression_stack;
     }
 
-    // reached root
-    // compression_outputs[0] is the root
     assert(on_compression_stack <= 2);
     uint32_t root_words[16];
     uint32_t flags;
@@ -311,12 +281,6 @@ int main(int argc, char *argv[]) {
         flags = PARENT;
     }
 
-    // printf("found root: ");
-    // for (size_t i = 0; i < 16; i++) {
-    //     printf("%02x", root_words[i]);
-    // }
-    // printf("\n");
-
     uint64_t output_block_counter = 0;
     size_t out_len = BLAKE3_OUT_LEN;
     uint8_t output[out_len];
@@ -325,7 +289,6 @@ int main(int argc, char *argv[]) {
 
     while (out_len > 0) {
         uint32_t words[16];
-        // printf("flags: %i\n", flags | ROOT); // ATTN
         compress(IV, root_words, output_block_counter, BLAKE3_BLOCK_LEN, flags | ROOT, words);
         for (size_t word = 0; word < 16; word++) {
             for (int byte = 0; byte < 4; byte++) {
@@ -345,6 +308,17 @@ int main(int argc, char *argv[]) {
     for (size_t i = 0; i < BLAKE3_OUT_LEN / sizeof(uint8_t); i++) 
         printf("%02x", output[i]);
     printf("\n");
+}
+
+int main(int argc, char *argv[]) {
+    // uint8_t key[BLAKE3_KEY_LEN];
+    // bool has_key = false;
+    // const char *derive_key_context = NULL;
+    if (argc <= 1) return 1;
+    char* test_file = argv[1];
+    if (argc == 3) omp_set_num_threads(atoi(argv[2]));
+
+    blake3_parallel(test_file, false, NULL, NULL);
 
     return 0;
 }
