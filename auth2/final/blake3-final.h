@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define CHUNK_START         1 << 0
 #define CHUNK_END           1 << 1
@@ -17,6 +18,11 @@
 #define BLAKE3_OUT_LEN      32
 #define BLAKE3_KEY_LEN      32
 #define CACHE_LINE_SIZE     64
+
+typedef enum {
+    SINGLE_THREAD,
+    MULTI_THREAD
+} Mode;
 
 typedef struct chunk_state {
     char block[BLAKE3_CHUNK_LEN];
@@ -141,3 +147,5 @@ inline static void compress(const uint32_t chaining_value[8], const uint32_t blo
 
   memcpy(out, state, sizeof(state));
 }
+
+void blake3(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint8_t* output, Mode mode);
