@@ -1,3 +1,4 @@
+test_inputs
 
 .vscode/
 
@@ -35,7 +36,8 @@ auth/main_arm
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
