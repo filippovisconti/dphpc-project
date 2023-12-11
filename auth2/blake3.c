@@ -5,10 +5,10 @@
 
 #include "blake3.h"
 
-void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint32_t init_flags, uint8_t* output);
-void blake3_chunk_state_slow_hasher(chunk_state* input_chunks, size_t nchunks, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint32_t init_flags, uint8_t* output);
+void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint32_t init_flags, uint8_t* output, size_t out_len);
+void blake3_chunk_state_slow_hasher(chunk_state* input_chunks, size_t nchunks, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint32_t init_flags, uint8_t* output, size_t out_len);
 
-void blake3(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint8_t* output, Mode mode) {
+void blake3(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint8_t* output, size_t out_len, Mode mode) {
     // open input stream
     FILE *input_stream = fopen(test_file, "rb");
     if (input_stream == NULL) {
@@ -36,16 +36,14 @@ void blake3(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], co
     // call blake3_chunk_state_hasher on chunk_state
     switch (mode) {
         case SINGLE_THREAD:
-            blake3_chunk_state_slow_hasher(input_chunks, nchunks, has_key, key, key_context, 0, output);
+            blake3_chunk_state_slow_hasher(input_chunks, nchunks, has_key, key, key_context, 0, output, out_len);
             break;
         case MULTI_THREAD:
-            blake3_chunk_state_hasher(input_chunks, nchunks, has_key, key, key_context, 0, output);
+            blake3_chunk_state_hasher(input_chunks, nchunks, has_key, key, key_context, 0, output, out_len);
     }
 }
 
-// #TODO: only supports standard blake3_out_len for output
-// possible issue if BLAKE_KEY_LEN != blake3_out_len in line 48
-void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint32_t init_flags, uint8_t* output) {
+void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint32_t init_flags, uint8_t* output, size_t out_len) {
     uint32_t master_chaining_value[8];
     uint32_t master_flags = init_flags;
     // // there are 3 options to init: running with key, deriving key, no key
@@ -60,8 +58,8 @@ void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool h
         size_t num_context_chunks = store_chunks(key_context_chunks, 0, key_context, strlen(key_context));
 
         // compress the context string
-        uint8_t context_out[BLAKE3_OUT_LEN];
-        blake3_chunk_state_hasher(key_context_chunks, num_context_chunks, false, NULL, NULL, master_flags, context_out);
+        uint8_t context_out[BLAKE3_KEY_LEN];
+        blake3_chunk_state_hasher(key_context_chunks, num_context_chunks, false, NULL, NULL, master_flags, context_out, BLAKE3_KEY_LEN);
         // set chaining value to the first 8 bytes of that output^
         uint32_t context_key_words[8];
         words_from_little_endian_bytes(context_out, BLAKE3_KEY_LEN, context_key_words);
@@ -93,20 +91,6 @@ void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool h
 
                 uint32_t out16[16];
                 compress(chaining_value, block_words, i, BLAKE3_BLOCK_LEN, flags, out16);
-                // printf("Block %i, counter = %i, flags = %i", b, i, flags);
-                // printf("\n    block words: ");
-                // for (size_t i = 0; i < 16; i++) {
-                //     printf("%02x", block_words[i]);
-                // }
-                // printf("\n    chaining value: ");
-                // for (size_t i = 0; i < 8; i++) {
-                //     printf("%02x", chaining_value[i]);
-                // }
-                // printf("\n    out: ");
-                // for (size_t i = 0; i < 16; i++) {
-                //     printf("%02x", out16[i]);
-                // }
-                // printf("\n");
                 for (size_t i = 0; i < 16; i++) chaining_value[i] = out16[i];
             }
 
@@ -165,8 +149,7 @@ void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool h
     }
 
     uint64_t output_block_counter = 0;
-    size_t out_len = BLAKE3_OUT_LEN;
-    // uint8_t output[out_len];
+    // size_t out_len = BLAKE3_OUT_LEN;
     void *out = output;
     uint8_t *out_u8 = (uint8_t *)out;
 
@@ -182,10 +165,11 @@ void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool h
                 out_len--;
             }
         }
+        output_block_counter++;
     }
 }
 
-void blake3_chunk_state_slow_hasher(chunk_state* input_chunks, size_t nchunks, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint32_t init_flags, uint8_t* output) {
+void blake3_chunk_state_slow_hasher(chunk_state* input_chunks, size_t nchunks, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint32_t init_flags, uint8_t* output, size_t out_len) {
     uint32_t master_chaining_value[8];
     uint32_t master_flags = init_flags;
     // // there are 3 options to init: running with key, deriving key, no key
@@ -200,8 +184,8 @@ void blake3_chunk_state_slow_hasher(chunk_state* input_chunks, size_t nchunks, b
         size_t num_context_chunks = store_chunks(key_context_chunks, 0, key_context, strlen(key_context));
 
         // compress the context string
-        uint8_t context_out[BLAKE3_OUT_LEN];
-        blake3_chunk_state_hasher(key_context_chunks, num_context_chunks, false, NULL, NULL, master_flags, context_out);
+        uint8_t context_out[BLAKE3_KEY_LEN];
+        blake3_chunk_state_hasher(key_context_chunks, num_context_chunks, false, NULL, NULL, master_flags, context_out, BLAKE3_KEY_LEN);
         // set chaining value to the first 8 bytes of that output^
         uint32_t context_key_words[8];
         words_from_little_endian_bytes(context_out, BLAKE3_KEY_LEN, context_key_words);
@@ -232,20 +216,6 @@ void blake3_chunk_state_slow_hasher(chunk_state* input_chunks, size_t nchunks, b
 
                 uint32_t out16[16];
                 compress(chaining_value, block_words, i, BLAKE3_BLOCK_LEN, flags, out16);
-                // printf("Block %i, counter = %i, flags = %i", b, i, flags);
-                // printf("\n    block words: ");
-                // for (size_t i = 0; i < 16; i++) {
-                //     printf("%02x", block_words[i]);
-                // }
-                // printf("\n    chaining value: ");
-                // for (size_t i = 0; i < 8; i++) {
-                //     printf("%02x", chaining_value[i]);
-                // }
-                // printf("\n    out: ");
-                // for (size_t i = 0; i < 16; i++) {
-                //     printf("%02x", out16[i]);
-                // }
-                // printf("\n");
                 for (size_t i = 0; i < 16; i++) chaining_value[i] = out16[i];
             }
 
@@ -259,16 +229,6 @@ void blake3_chunk_state_slow_hasher(chunk_state* input_chunks, size_t nchunks, b
     }
 
     free(input_chunks); // no longer needed after compression
-
-    // TESTING
-    // printf("Compression Outputs: \n");
-    // for (int n = 0; n < nchunks; n++) {
-    //     printf("    chunk %i:", n);
-    //     for (size_t i = 0; i < 16; i++) {
-    //         printf("%02x", compression_outputs[n][i]);
-    //     }
-    //     printf("\n");
-    // }
 
     // creating parent nodes until root is reached
     int on_compression_stack = nchunks;
@@ -313,17 +273,9 @@ void blake3_chunk_state_slow_hasher(chunk_state* input_chunks, size_t nchunks, b
     }
 
     uint64_t output_block_counter = 0;
-    size_t out_len = BLAKE3_OUT_LEN;
-    // uint8_t output[out_len];
+    // size_t out_len = BLAKE3_OUT_LEN;
     void *out = output;
     uint8_t *out_u8 = (uint8_t *)out;
-
-    // printf("Root Words: ");
-    // for (int i = 0; i < 16; i++) printf("%02x", root_words[i]);
-    // printf("\n flags: %i, output_block_counter: %i, block_len: %i\n", flags | ROOT, output_block_counter, BLAKE3_BLOCK_LEN);
-
-    // printf("chaining value: ");
-    // for (int i = 0; i < 16; i++) printf("%02x", master_chaining_value[i]);
 
     while (out_len > 0) {
         uint32_t words[16];
@@ -337,5 +289,6 @@ void blake3_chunk_state_slow_hasher(chunk_state* input_chunks, size_t nchunks, b
                 out_len--;
             }
         }
+        output_block_counter++;
     }
 }

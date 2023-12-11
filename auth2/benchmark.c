@@ -7,20 +7,21 @@
 
 #include "blake3.h"
 #include "include/reference_impl.h"
-#include <papi.h>
+// #include <papi.h>
 
-void blake3_baseline(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint8_t* output);
-bool output_cmp(uint8_t arr1[], uint8_t arr2[]) {
-    for (size_t i = 0; i < BLAKE3_OUT_LEN; i++) {
+void blake3_baseline(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint8_t* output, size_t out_len);
+bool output_cmp(uint8_t arr1[], uint8_t arr2[], size_t out_len) {
+    for (size_t i = 0; i < out_len; i++) {
         if (arr1[i] != arr2[i]) return false;
     }
     return true;
 }
 
 int main(int argc, char *argv[]) {
-    if (argc <= 1) return 1;
+    if (argc <= 2) return 1;
     char* test_file = argv[1];
-    if (argc == 3) omp_set_num_threads(atoi(argv[2]));
+    size_t out_len = atoi(argv[2]);
+    if (argc == 4) omp_set_num_threads(atoi(argv[3]));
 
 
     PAPI_library_init(PAPI_VER_CURRENT);
@@ -30,30 +31,30 @@ int main(int argc, char *argv[]) {
     PAPI_add_event(event_set, PAPI_TOT_INS);  // Total instructions
     long long count[2];
 
-    uint8_t verified_output[BLAKE3_OUT_LEN];
-    uint8_t output[BLAKE3_OUT_LEN];
+    uint8_t verified_output[out_len];
+    uint8_t output[out_len];
 
     printf("Standard Mode\n");
     // base mode - baseline
     PAPI_start(eventset);
-    blake3_baseline(test_file, false, NULL, NULL, verified_output);
+    blake3_baseline(test_file, false, NULL, NULL, verified_output, out_len);
     PAPI_stop(eventset, count);
     printf("    BASELINE -- cycles: %li     instrs: %li\n", count[0], count[1]);
 
     // base mode - single thread
     PAPI_reset(eventset);
     PAPI_start(eventset);
-    blake3(test_file, false, NULL, NULL, output, SINGLE_THREAD);
+    blake3(test_file, false, NULL, NULL, output, out_len, SINGLE_THREAD);
     PAPI_stop(eventset,count);
-    assert(output_cmp(verified_output, output) == true);
+    assert(output_cmp(verified_output, output, out_len) == true);
     printf("    SINGLE_THREAD -- cycles: %li     instrs: %li\n", count[0], count[1]);
 
     // base mode - multi thread
     PAPI_reset(eventset);
     PAPI_start(eventset);
-    blake3(test_file, false, NULL, NULL, output, MULTI_THREAD);
+    blake3(test_file, false, NULL, NULL, output,out_len, MULTI_THREAD);
     PAPI_stop(eventset, count);
-    assert(output_cmp(verified_output, output) == true);
+    assert(output_cmp(verified_output, output, out_len) == true);
     printf("    MULTI_THREAD -- cycles: %li     instrs: %li\n", count[0], count[1]);
 
     // -------------------------------------------
@@ -64,25 +65,25 @@ int main(int argc, char *argv[]) {
     // keyed mode - baseline
     PAPI_reset(eventset);
     PAPI_start(eventset);
-    blake3_baseline(test_file, true, key, NULL, verified_output);
+    blake3_baseline(test_file, true, key, NULL, verified_output, out_len);
     PAPI_stop(eventset, count);
     printf("    BASELINE -- cycles: %li     instrs: %li\n", count[0], count[1]);
 
     // keyed mode - single thread
     PAPI_reset(eventset);
     PAPI_start(eventset);
-    blake3(test_file, true, key, NULL, output, SINGLE_THREAD);
+    blake3(test_file, true, key, NULL, output, out_len, SINGLE_THREAD);
     PAPI_stop(eventset, count);
     printf("    SINGLE_THREAD -- cycles: %li     instrs: %li\n", count[0], count[1]);
-    assert(output_cmp(verified_output, output) == true);
+    assert(output_cmp(verified_output, output, out_len) == true);
 
     // keyed mode - multi thread
     PAPI_reset(eventset);
     PAPI_start(eventset);
-    blake3(test_file, true, key, NULL, output, MULTI_THREAD);
+    blake3(test_file, true, key, NULL, output, out_len, MULTI_THREAD);
     PAPI_stop(eventset, count);
     printf("    MULTI_THREAD -- cycles: %li     instrs: %li\n", count[0], count[1]);
-    assert(output_cmp(verified_output, output) == true);
+    assert(output_cmp(verified_output, output, out_len) == true);
 
     // -------------------------------------------
     printf("Derive Key Mode\n");
@@ -92,7 +93,7 @@ int main(int argc, char *argv[]) {
     // derive key mode - baseline
     PAPI_reset(eventset);
     PAPI_start(eventset);
-    blake3_baseline(test_file, false, NULL, context, verified_output);
+    blake3_baseline(test_file, false, NULL, context, verified_output, out_len);
     PAPI_stop(eventset, count);
     printf("    BASELINE -- cycles: %li     instrs: %li\n", count[0], count[1]);
     // for (size_t i = 0; i < BLAKE3_OUT_LEN / sizeof(uint8_t); i++) 
@@ -102,23 +103,23 @@ int main(int argc, char *argv[]) {
     // derive key mode - single thread
     PAPI_reset(eventset);
     PAPI_start(eventset);
-    blake3(test_file, false, NULL, context, output, SINGLE_THREAD);
+    blake3(test_file, false, NULL, context, output, out_len, SINGLE_THREAD);
     PAPI_stop(eventset, count);
     printf("    SINGLE_THREAD -- cycles: %li     instrs: %li\n", count[0], count[1]);
-    assert(output_cmp(verified_output, output) == true);
+    assert(output_cmp(verified_output, output, out_len) == true);
 
     // derive key mode - multi thread
     PAPI_reset(eventset);
     PAPI_start(eventset);
-    blake3(test_file, false, NULL, context, output, MULTI_THREAD);
+    blake3(test_file, false, NULL, context, output, out_len, MULTI_THREAD);
     PAPI_stop(eventset, count);
     printf("    MULTI_THREAD -- cycles: %li     instrs: %li\n", count[0], count[1]);
-    assert(output_cmp(verified_output, output) == true);
+    assert(output_cmp(verified_output, output, out_len) == true);
 
     return 0;
 }
 
-void blake3_baseline(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint8_t* output) {
+void blake3_baseline(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint8_t* output, size_t out_len) {
     FILE *input_stream = fopen(test_file, "rb");
     if (input_stream == NULL) {
         printf("Can't open file\n");
@@ -149,5 +150,5 @@ void blake3_baseline(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY
     }
 
     fclose(input_stream);
-    blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
+    blake3_hasher_finalize(&hasher, output, out_len);
 }

@@ -148,4 +148,4 @@ inline static void compress(const uint32_t chaining_value[8], const uint32_t blo
   memcpy(out, state, sizeof(state));
 }
 
-void blake3(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint8_t* output, Mode mode);
+void blake3(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint8_t* output, size_t out_len, Mode mode);
