@@ -18,10 +18,17 @@ bool output_cmp(uint8_t arr1[], uint8_t arr2[], size_t out_len) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc <= 2) return 1;
+    // arg1: file to be hashed
+    // arg2: output size of hash
+    // arg3: file containing key, to test key hashing mode
+    // arg4: file containing key context, to test context derivation mode
+    // arg5: optional to specify number of OpenMP threads
+    if (argc < 6) return 1;
     char* test_file = argv[1];
     size_t out_len = atoi(argv[2]);
-    if (argc == 4) omp_set_num_threads(atoi(argv[3]));
+    char* key_file = argv[3];
+    char* context_file = argv[4];
+    if (argc == 6) omp_set_num_threads(atoi(argv[5]));
 
 
     PAPI_library_init(PAPI_VER_CURRENT);
@@ -59,8 +66,15 @@ int main(int argc, char *argv[]) {
 
     // -------------------------------------------
     printf("Keyed Mode\n");
+    FILE *key_stream = fopen(test_file, "rb");
+    if (key_stream == NULL) {
+        printf("Can't open file\n");
+        exit(1);
+    }
     uint8_t key[BLAKE3_KEY_LEN];
-    for (int i = 0; i < BLAKE3_KEY_LEN; i++) key[i] = i;
+    ssize_t n = fread(key, 1, sizeof(key), key_stream);
+    assert(n == sizeof(key));
+    fclose(key_stream);
 
     // keyed mode - baseline
     PAPI_reset(eventset);
@@ -87,8 +101,18 @@ int main(int argc, char *argv[]) {
 
     // -------------------------------------------
     printf("Derive Key Mode\n");
-    char context[2048];
-    for (int i = 0; i < 2048; i++) context[i] = 'A' + (i % 26);
+    FILE *context_stream = fopen(context_file, "rb");
+    if (context_stream == NULL) {
+        printf("Can't open file\n");
+        exit(1);
+    }
+
+    char buf[65536];
+    n = fread(buf, 1, sizeof(buf), context_stream);
+    char context[n + 1];
+    memcpy(context, buf, sizeof(context));
+    context[n] = '\0';
+    fclose(context_stream);
 
     // derive key mode - baseline
     PAPI_reset(eventset);
