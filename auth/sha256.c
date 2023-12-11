@@ -165,7 +165,7 @@ void calculate_sha256(FILE *file) {
 
     }  // end while
 
-    // Print the results
+/*     // Print the results
     printf(
         "\n=================== SHA256 HASH OUTPUT "
         "==================================\n");
@@ -182,8 +182,8 @@ void calculate_sha256(FILE *file) {
         "\n===================================================================="
         "====="
         "\n\n");
-
-    fclose(file);
+ */
+    // fclose(file);
 }
 
 // This function is used to handle the opening and reading of files

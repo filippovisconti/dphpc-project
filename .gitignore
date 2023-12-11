@@ -305,3 +305,5 @@ auth/input_data/
 .clang
 
 auth/test
+
+auth/Makefile_old

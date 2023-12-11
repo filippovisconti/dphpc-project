@@ -18,8 +18,6 @@ def test_input(length: int):
         ret.append(i % 251)
     return ret
 
-# write test_input(length) to file
-
 
 def write_test_input(length: int):
     with open("test_input", "wb") as f:
