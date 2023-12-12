@@ -1,6 +1,8 @@
-FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O3 -march=native -fopenmp -g -DBENCHMARK
-#-DDEBUG
-INCLUDES := -I include -lm
+FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O2 -march=native -fopenmp
+FLAGS += -g3 -ggdb
+# FLAGS+=-DBENCHMARK
+# FLAGS+=-DDEBUG
+INCLUDES := -I include
 UNAME := $(shell uname -m)
 CC := gcc
 TEST_SOURCES := myblake.c blake.c quick_test.c utils.c
@@ -9,11 +11,11 @@ BENCHMARK_SOURCES := benchmark.c myblake.c blake.c sha256.c utils.c
 NUM_THREADS := 32
 
 test: clean
-	$(CC) $(FLAGS)  -o test $(TEST_SOURCES) $(INCLUDES)
+	$(CC) $(FLAGS)  -o test $(TEST_SOURCES) $(INCLUDES) -lm
 	# ./test
 
 test_mp: clean
-	$(CC) $(FLAGS) -DUSE_OPENMP -o test $(TEST_SOURCES) $(INCLUDES)
+	$(CC) $(FLAGS) -DUSE_OPENMP -o test $(TEST_SOURCES) $(INCLUDES) -lm
 	OMP_NUM_THREADS=$(NUM_THREADS) ./test
 
 ifeq ($(UNAME), arm64)
@@ -45,15 +47,17 @@ clean:
 else
 
 # ------------- running on x86_64 -------------
-FLAGS += -DUSE_PAPI
+# FLAGS += -DUSE_PAPI
 PAPI_EVENTS := PAPI_TOT_CYC
 PAPI_OUTPUT_DIRECTORY := "measurements"
 PAPI_DEBUG := HIGHLEVEL
-PAPI_EXPORT := LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) PAPI_EVENTS="$(PAPI_EVENTS)"
+PAPI_EXPORT := PAPI_EVENTS="$(PAPI_EVENTS)"
 PAPI_EXPORT += PAPI_OUTPUT_DIRECTORY=$(PAPI_OUTPUT_DIRECTORY) PAPI_DEBUG=${PAPI_DEBUG}
+# PAPI_EXPORT := LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) PAPI_EVENTS="$(PAPI_EVENTS)"
 
-INCLUDES := -I${CPATH} -I include -lm
-L := -L${LD_LIBRARY_PATH} -lm -lpapi
+INCLUDES := -I include
+# INCLUDES :=  -I include -I/${PAPI_DIR}/include  -I${CPATH}
+L := -L${LD_LIBRARY_PATH} -L/${PAPI_DIR}/lib -lm -lpapi
 
 blake:
 	$(CC) $(FLAGS) -o blake $(BLAKE_SOURCES) $(INCLUDES)
@@ -90,8 +94,9 @@ all: blake
 gen:
 	sh gen_test_data.sh
 
-# set USER to your username
-# run like e.g.: USER=fvisconti make ssh-copy
+# USER=root
+# REMOTE_HOST := priv-testbench
+USER=fvisconti
 REMOTE_HOST := euler
 REMOTE_DIR := /cluster/home/${USER}/blake
 TO_COPY := Makefile *.c include *.json *.sh gen.py input_sizes.txt

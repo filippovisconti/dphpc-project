@@ -101,14 +101,21 @@ int main(void) {
 
     fclose(sizesFile);
 
+    int   str_len  = strlen(prefix) + 8 * sizeof(char) + strlen(suffix) + 1;
+    char *filename = malloc(str_len);
+    assert(filename != NULL);
+
 #ifdef USE_OPENMP
     int num_avail_threads = omp_get_max_threads();
     omp_set_dynamic(0);
     printf("[INFO:] Max number of threads: %d\n", num_avail_threads);
     for (size_t size = 0; size < num_sizes; size++) {
+        memset(filename, 0, str_len);
+        strcpy(filename, prefix);
+        strcat(filename, sizes[size]);
+        strcat(filename, suffix);
+
         for (int i = 0; i < REPETITIONS; i++) {
-            char filename[100];
-            sprintf(filename, "%s%s%s", prefix, sizes[size], suffix);
             printf("[INFO:] Running benchmark for %s, %d\n", sizes[size], i);
             omp_set_num_threads(num_avail_threads);
             run_benchmark_my(filename);
@@ -116,29 +123,38 @@ int main(void) {
     }
 #else
     for (size_t size = 0; size < num_sizes; size++) {
+        memset(filename, 0, str_len);
+        strcpy(filename, prefix);
+        strcat(filename, sizes[size]);
+        strcat(filename, suffix);
         for (int i = 0; i < REPETITIONS; i++) {
-            char filename[100];
-            sprintf(filename, "%s%s%s", prefix, sizes[size], suffix);
             printf("[INFO:] Running benchmark for %s, %d\n", sizes[size], i);
             run_benchmark_my(filename);
         }
     }
     for (size_t size = 0; size < num_sizes; size++) {
+        memset(filename, 0, str_len);
+        strcpy(filename, prefix);
+        strcat(filename, sizes[size]);
+        strcat(filename, suffix);
+
         for (int i = 0; i < REPETITIONS; i++) {
-            char filename[100];
-            sprintf(filename, "%s%s%s", prefix, sizes[size], suffix);
             printf("[INFO:] Running ref benchmark for %s, %d\n", sizes[size], i);
             run_benchmark_ref(filename);
         }
     }
     for (size_t size = 0; size < num_sizes; size++) {
+        memset(filename, 0, str_len);
+        strcpy(filename, prefix);
+        strcat(filename, sizes[size]);
+        strcat(filename, suffix);
+
         for (int i = 0; i < REPETITIONS; i++) {
-            char filename[100];
-            sprintf(filename, "%s%s%s", prefix, sizes[size], suffix);
             printf("[INFO:] Running sha benchmark for %s, %d\n", sizes[size], i);
             run_benchmark_sha(filename);
         }
     }
 #endif
+    free(filename);
     return 0;
 }

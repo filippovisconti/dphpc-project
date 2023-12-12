@@ -392,9 +392,8 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
     int      current_number_of_nodes = num_threads;
     myprintf("\ncurrent_number_of_nodes: %d\n", current_number_of_nodes);
     myprintf("num_threads: %d\n", num_threads);
-    myprintf("num_leaves: %ld\n", num_leaves);
-    uint32_t(*buffer_a)[8] = calloc(num_leaves / 2, sizeof(uint32_t[8]));
-    uint32_t(*buffer_b)[8] = calloc(num_leaves / 4, sizeof(uint32_t[8]));
+    uint32_t(*buffer_a)[8] = calloc(MAX(current_number_of_nodes >> 1, 1), sizeof(uint32_t[8]));
+    uint32_t(*buffer_b)[8] = calloc(MAX(current_number_of_nodes >> 2, 1), sizeof(uint32_t[8]));
     uint32_t *out16        = malloc(16 * sizeof(uint32_t));
     assert(buffer_a != NULL);
     assert(buffer_b != NULL);
@@ -406,6 +405,7 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
 
         if (current_number_of_nodes <= 2) flags |= ROOT;
         compress(IV, message_words, counter_t, 64, flags, out16);
+        assert(i < (current_number_of_nodes >> 1));
         for (int j = 0; j < 8; j++) buffer_a[i][j] = out16[j];
     }
     free(out16);

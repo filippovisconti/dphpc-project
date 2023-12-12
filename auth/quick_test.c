@@ -7,6 +7,8 @@
 #include "myblake.h"
 #include "reference_impl.h"
 
+#define REPETITIONS 1
+
 void run_test(char *filename, int mode) {
     size_t output_len = BLAKE3_OUT_LEN * 4;
 
@@ -97,13 +99,16 @@ int main(void) {
 
     fclose(sizesFile);
 
+#ifdef USE_OPENMP
     int num_avail_threads = omp_get_max_threads();
     omp_set_dynamic(0);
+#endif
+    int   str_len  = strlen(prefix) + 8 * sizeof(char) + strlen(suffix) + 1;
+    char *filename = malloc(str_len);
+    assert(filename != NULL);
     for (int mode = 0; mode < 3; mode++)
         for (size_t size = 0; size < num_sizes; size++) {
-            char *filename = malloc(strlen(prefix) + strlen(sizes[size]) + strlen(suffix) + 1);
-            assert(filename != NULL);
-
+            memset(filename, 0, str_len);
             strcpy(filename, prefix);
             strcat(filename, sizes[size]);
             strcat(filename, suffix);
@@ -113,10 +118,16 @@ int main(void) {
                 continue;
             }
             printf("[INFO:] Running test for %26s: ", filename);
-            omp_set_num_threads(num_avail_threads);  // e
-            run_test(filename, mode);
-            free(filename);
+
+            for (int i = 0; i < REPETITIONS; i++) {
+#ifdef USE_OPENMP
+                omp_set_num_threads(num_avail_threads);
+#endif
+                run_test(filename, mode);
+            }
         }
+
+    free(filename);
 
     return EXIT_SUCCESS;
 }
