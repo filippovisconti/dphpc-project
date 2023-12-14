@@ -7,5 +7,5 @@
 #SBATCH --error=blake.err
 
 
-module load gcc/9.3.0 papi/7.0.1
-make run_mp
+module load gcc/11.4.0 papi/7.0.1
+make test_mp

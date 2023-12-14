@@ -1,4 +1,4 @@
-#include "myblake.h"
+#include "blake_f.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -16,10 +16,11 @@ static uint32_t base_IV[8] = {
 };
 
 uint32_t *IV = base_IV;
+#define UINT32_8 8 * sizeof(uint32_t)
 
 static void short_inputs(
     char *filename, uint8_t *output, size_t output_len, int num_chunks, uint32_t base_flags) {
-
+    myprintf(" short ");
     FILE *input = fopen(filename, "rb");
     assert(input != NULL);
 
@@ -158,8 +159,6 @@ static void short_inputs(
         } else myprintf("skipping compress\n");
     }
     current_number_of_nodes >>= 1;
-    // current_number_of_nodes = CEIL_DIV(current_number_of_nodes, 2);  // now we have 3
-    // current_number_of_nodes += do_later;
     if (current_number_of_nodes == 1 && do_later) {
         do_later = 0;
         printf("out-copying node %ld at pos %d\n", index, current_number_of_nodes - 1);
@@ -217,8 +216,7 @@ static void short_inputs(
 void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, uint8_t *key,
     const char *derive_key_context, uint32_t initial_flags) {
 
-    IV = base_IV;
-
+    IV                  = base_IV;
     uint32_t base_flags = initial_flags;
 
     if (has_key) {
@@ -253,8 +251,9 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
 
     int num_chunks = get_num_chunks(filename);
 
-    if (num_chunks < 8) {
+    if (num_chunks <= 8) {
         myprintf("running short version, on num_chunks: %d\n", num_chunks);
+
         short_inputs(filename, output, output_len, num_chunks, base_flags);
         if (has_key || derive_key_context != NULL) free(IV);
 
@@ -281,17 +280,16 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
         assert(thread_num <= num_threads);
 #endif
 
-        uint64_t stride       = (thread_num * num_leaves) << CHUNK_SIZE_LOG;
-        FILE    *thread_input = fopen(filename, "rb");
+        uint64_t chunk = 0, chunk_counter = 0;
+        uint64_t stride    = (thread_num * num_leaves) << CHUNK_SIZE_LOG;
+        uint64_t read_size = num_leaves << CHUNK_SIZE_LOG;
+
+        FILE *thread_input = fopen(filename, "rb");
         fseek(thread_input, stride, SEEK_SET);
 
         uint32_t(*chunk_chaining_values)[8] = calloc(num_leaves, sizeof(uint32_t[8]));
+        char *read_buffer                   = malloc(4 * CHUNK_SIZE);
         assert(chunk_chaining_values != NULL);
-
-        uint64_t chunk         = 0;
-        uint64_t chunk_counter = 0;
-        uint64_t read_size     = num_leaves << CHUNK_SIZE_LOG;
-        char    *read_buffer   = malloc(4 * CHUNK_SIZE);
         assert(read_buffer != NULL);
 
         while (!feof(thread_input) && read_size > 0) {
@@ -301,9 +299,6 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
             read_size -= len;
 
             uint64_t num_read_chunks = CEIL_DIV(len, CHUNK_SIZE);
-            assert(num_read_chunks <= 4);
-
-            // START BASE CHUNK PROCESSING
             for (uint64_t i = 0; i < num_read_chunks; i++, chunk++) {
                 int num_blocks = 16;
                 int remaining  = (len - CHUNK_SIZE * (num_read_chunks - 1));
@@ -317,13 +312,10 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
                 compute_chunk_chaining_values(
                     IV, read_buffer, num_blocks, counter_t, chunk, chaining_value, base_flags);
 
-                // save last block's cv for parent processing
-                assert(chunk_counter < num_leaves);
                 for (int j = 0; j < 8; j++)
                     chunk_chaining_values[chunk_counter][j] = chaining_value[j];
                 chunk_counter++;
             }
-            // END BASE CHUNK PROCESSING
         }
         free(read_buffer);
         fclose(thread_input);
@@ -339,14 +331,14 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
 
         uint8_t a_or_b = 1;
 
+        uint32_t out16[16];
         for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
             memcpy(message_words + 0, (&chunk_chaining_values[2 * i + 0]), 32);
             memcpy(message_words + 8, (&chunk_chaining_values[2 * i + 1]), 32);
 
-            uint32_t out16[16];
             compress(input_chaining_value, message_words, 0, 64, PARENT | base_flags, out16);
 
-            memcpy(buffer_a + i, out16, sizeof(out16) >> 1);
+            memcpy(buffer_a + i, out16, 8 * sizeof(uint32_t));
         }
         current_number_of_nodes >>= 1;
         free(chunk_chaining_values);
@@ -361,54 +353,51 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
                     memcpy(message_words + 8, &buffer_b[2 * i + 1][0], 32);
                 }
 
-                uint32_t out16[16];
                 compress(input_chaining_value, message_words, 0, 64, PARENT | base_flags, out16);
 
-                memcpy((a_or_b) ? &buffer_b[i] : &buffer_a[i], out16, sizeof(out16) >> 1);
+                memcpy((a_or_b) ? &buffer_b[i] : &buffer_a[i], out16, UINT32_8);
             }
             current_number_of_nodes >>= 1;
             a_or_b = !a_or_b;
         }
-#ifdef ENABLE_PRINT
+
         if (current_number_of_nodes != 1)
-            printf("current_number_of_nodes: %d\n", current_number_of_nodes);
-#endif
+            myprintf("current_number_of_nodes: %d\n", current_number_of_nodes);
+
         assert(current_number_of_nodes == 1);
         assert(thread_num < num_threads);
-
-        for (int j = 0; j < 8; j++)
-            parent_chaining_values[thread_num][j] = (a_or_b) ? buffer_a[0][j] : buffer_b[0][j];
-
+        memcpy(parent_chaining_values[thread_num], ((a_or_b) ? buffer_a : buffer_b)[0], UINT32_8);
         free(buffer_a);
         free(buffer_b);
     }
-    // printf("END PARALLEL REGION\n");
+    myprintf("END PARALLEL REGION\n");
+    myprintf("\ncurrent_number_of_nodes: %d\n", num_threads);
+
     int      counter_t = 0;                    // always 0 for parent nodes
     uint32_t flags     = PARENT | base_flags;  // set parent flag
-
-    // const uint32_t */* input_chaining_value */ = IV;  // input ch val is the
-    // keywords
-    uint32_t message_words[16];  // first 8 is left child, second 8 is the right one;
+    uint32_t message_words[16];                // first 8 is left child, second 8 is the right one;
     int      current_number_of_nodes = num_threads;
-    myprintf("\ncurrent_number_of_nodes: %d\n", current_number_of_nodes);
-    myprintf("num_threads: %d\n", num_threads);
-    myprintf("num_leaves: %ld\n", num_leaves);
-    uint32_t(*buffer_a)[8] = calloc(num_leaves / 2, sizeof(uint32_t[8]));
-    uint32_t(*buffer_b)[8] = calloc(num_leaves / 4, sizeof(uint32_t[8]));
-    uint32_t *out16        = malloc(16 * sizeof(uint32_t));
+
+    uint32_t(*buffer_a)[8] = calloc(MAX(current_number_of_nodes >> 1, 1), sizeof(uint32_t[8]));
+    uint32_t(*buffer_b)[8] = calloc(MAX(current_number_of_nodes >> 2, 1), sizeof(uint32_t[8]));
     assert(buffer_a != NULL);
     assert(buffer_b != NULL);
+
+    uint32_t *out16 = malloc(16 * sizeof(uint32_t));
     assert(out16 != NULL);
+
     for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
         // we want the first 32 bytes
         memcpy(message_words + 0, (&parent_chaining_values[2 * i + 0]), 32);
         memcpy(message_words + 8, (&parent_chaining_values[2 * i + 1]), 32);
 
         if (current_number_of_nodes <= 2) flags |= ROOT;
+
         compress(IV, message_words, counter_t, 64, flags, out16);
-        for (int j = 0; j < 8; j++) buffer_a[i][j] = out16[j];
+        assert(i < (current_number_of_nodes >> 1));
+
+        memcpy(buffer_a + i, out16, UINT32_8);
     }
-    free(out16);
     current_number_of_nodes >>= 1;
     if (current_number_of_nodes == 1) myprintf("skipping while loop\n");
 
@@ -425,14 +414,13 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
                 memcpy(message_words + 8, &buffer_b[2 * i + 1][0], 32);
             }
 
-            uint32_t out16[16];
             compress(IV, message_words, counter_t, 64, flags, out16);
-
-            memcpy((a_or_b) ? &buffer_b[i] : &buffer_a[i], out16, sizeof(out16) >> 1);
+            memcpy((a_or_b) ? &buffer_b[i] : &buffer_a[i], out16, UINT32_8);
         }
         current_number_of_nodes >>= 1;
         a_or_b = !a_or_b;
     }
+    free(out16);
     free(buffer_a);
     free(buffer_b);
     if (current_number_of_nodes != 1)
@@ -447,11 +435,14 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
 
 #if defined MYBLAKE_MAIN
 int         main(void) {
-    char    filename[] = "input_data/input_256MB.txt";
-    size_t  output_len = 128;
-    uint8_t output[output_len];
+    uint8_t     key[BLAKE3_KEY_LEN] = {0};
+    bool        has_key             = false;
+    const char *derive_key_context  = NULL;
+    char        filename[]          = "input_data/input_256MB.txt";
+    size_t      output_len          = 128;
+    uint8_t     output[output_len];
 
-    myblake(filename, output, output_len);
+    myblake(filename, output, output_len, has_key, key, derive_key_context, 0);
 
     printf("\n\nOutput: ");
     for (size_t i = 0; i < output_len; i++) {

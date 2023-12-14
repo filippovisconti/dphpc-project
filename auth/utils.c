@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#include "myblake.h"
+#include "blake_f.h"
 
 static uint32_t base_IV[8] = {
     0x6A09E667,
@@ -133,7 +133,7 @@ int get_num_chunks(char *filename) {
     uint64_t size = ftell(input);
     fclose(input);
 
-    myprintf("input size: %lld\n", size);
+    // myprintf("input size: %lld\n", size);
     int  num_chunks        = size >> CHUNK_SIZE_LOG;  // divide by 1024
     bool chunks_pow_of_two = (num_chunks & (num_chunks - 1)) == 0;
 

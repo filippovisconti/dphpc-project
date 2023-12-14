@@ -4,11 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "myblake.h"
+#include "blake_d.h"
+#include "blake_f.h"
 #include "reference_impl.h"
 
+#define REPETITIONS 15
+#define OUTPUT_LEN  256
+
 void run_test(char *filename, int mode) {
-    size_t output_len = BLAKE3_OUT_LEN * 4;
 
     uint8_t key[BLAKE3_KEY_LEN];
     if (mode == 1)
@@ -29,20 +32,31 @@ void run_test(char *filename, int mode) {
         exit(1);
     }
 
-    uint8_t *output_ref = malloc(output_len);
-    uint8_t *output_my  = malloc(output_len);
-    myprintf("************** REFERENCE BLAKE3 STOUT **************\n");
-    blake3(has_key, key, derive_key_context, output_len, input, output_ref);
+    uint8_t *output_ref = malloc(OUTPUT_LEN);
+    uint8_t *output_my  = malloc(OUTPUT_LEN);
+    uint8_t *output_d   = malloc(OUTPUT_LEN);
+    // myprintf("************** REFERENCE BLAKE3 STOUT **************\n");
+    myprintf("****************************************************\n");
+    blake3(has_key, key, derive_key_context, OUTPUT_LEN, input, output_ref);
     fclose(input);
-    myprintf("************** MY BLAKE3 STOUT *********************\n");
-    myblake(filename, output_my, output_len, has_key, key, derive_key_context, 0);
+    myprintf("************** F BLAKE3 STOUT **********************\n");
+    myblake(filename, output_my, OUTPUT_LEN, has_key, key, derive_key_context, 0);
+    myprintf("************** D BLAKE3 STOUT **********************\n");
+    blake(filename, false, NULL, NULL, output_d, OUTPUT_LEN,
+#ifdef USE_OPENMP
+        MULTI_THREAD);
+#else
+        SINGLE_THREAD);
+#endif
     // printf("****************************************************\n");
     free(derive_key_context);
-    char *output_hex_ref = malloc(output_len * 2 + 1);
-    char *output_hex     = malloc(output_len * 2 + 1);
-    for (size_t i = 0; i < output_len; i++) {
+    char *output_hex_ref = malloc(OUTPUT_LEN * 2 + 1);
+    char *output_hex     = malloc(OUTPUT_LEN * 2 + 1);
+    char *output_hex_d   = malloc(OUTPUT_LEN * 2 + 1);
+    for (size_t i = 0; i < OUTPUT_LEN; i++) {
         sprintf(output_hex_ref + 2 * i, "%02x", output_ref[i]);
         sprintf(output_hex + 2 * i, "%02x", output_my[i]);
+        sprintf(output_hex_d + 2 * i, "%02x", output_d[i]);
     }
 
     //=========================================
@@ -51,10 +65,10 @@ void run_test(char *filename, int mode) {
         printf("[REFERENCE]:\n");
         PRINT_WITH_NEWLINE(output_hex_ref, 64);
         printf("\n");
-        printf("[CALCULATED]:\n");
+        printf("[F CALCULATED]:\n");
         PRINT_WITH_NEWLINE(output_hex, 64);
         printf("\n");
-        // for (size_t i = 0; i < output_len; i++) {
+        // for (size_t i = 0; i < OUTPUT_LEN; i++) {
         //     if (output_ref[i] != output_my[i]) {
         //         printf("ERROR: %3zu | ", i);
         //         printf("REF: %02x | ", output_ref[i]);
@@ -63,16 +77,43 @@ void run_test(char *filename, int mode) {
         // }
         free(output_ref);
         free(output_my);
+        free(output_d);
         free(output_hex_ref);
         free(output_hex);
+        free(output_hex_d);
         exit(1);
-    }
+    } else printf("F: OK\n");
+    cond = strcmp(output_hex_d, output_hex_ref) == 0;
+    if (!cond) {
+        printf("[REFERENCE]:\n");
+        PRINT_WITH_NEWLINE(output_hex_ref, 64);
+        printf("\n");
+        printf("[D CALCULATED]:\n");
+        PRINT_WITH_NEWLINE(output_hex_d, 64);
+        printf("\n");
+        // for (size_t i = 0; i < OUTPUT_LEN; i++) {
+        //     if (output_ref[i] != output_d[i]) {
+        //         printf("ERROR: %3zu | ", i);
+        //         printf("REF: %02x | ", output_ref[i]);
+        //         printf("GOT: %02x\n", output_d[i]);
+        //     }
+        // }
+        free(output_ref);
+        free(output_my);
+        free(output_d);
+        free(output_hex_ref);
+        free(output_hex);
+        free(output_hex_d);
+        exit(1);
+    } else printf("D: OK\n");
+
     assert(cond);
-    printf("SUCCESS\n");
     free(output_ref);
     free(output_my);
+    free(output_d);
     free(output_hex_ref);
     free(output_hex);
+    free(output_hex_d);
 }
 
 int main(void) {
@@ -97,13 +138,16 @@ int main(void) {
 
     fclose(sizesFile);
 
+#ifdef USE_OPENMP
     int num_avail_threads = omp_get_max_threads();
     omp_set_dynamic(0);
+#endif
+    int   str_len  = strlen(prefix) + 8 * sizeof(char) + strlen(suffix) + 1;
+    char *filename = malloc(str_len);
+    assert(filename != NULL);
     for (int mode = 0; mode < 3; mode++)
         for (size_t size = 0; size < num_sizes; size++) {
-            char *filename = malloc(strlen(prefix) + strlen(sizes[size]) + strlen(suffix) + 1);
-            assert(filename != NULL);
-
+            memset(filename, 0, str_len);
             strcpy(filename, prefix);
             strcat(filename, sizes[size]);
             strcat(filename, suffix);
@@ -113,10 +157,17 @@ int main(void) {
                 continue;
             }
             printf("[INFO:] Running test for %26s: ", filename);
-            omp_set_num_threads(num_avail_threads);  // e
-            run_test(filename, mode);
-            free(filename);
+
+            for (int i = 0; i < REPETITIONS; i++) {
+#ifdef USE_OPENMP
+                omp_set_num_threads(num_avail_threads);
+#endif
+                run_test(filename, mode);
+            }
+            printf("SUCCESS\n");
         }
+
+    free(filename);
 
     return EXIT_SUCCESS;
 }

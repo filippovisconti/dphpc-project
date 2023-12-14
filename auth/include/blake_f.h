@@ -12,27 +12,12 @@
 #include <unistd.h>
 
 #include "omp.h"
+#include "reference_impl.h"
 
-#define CHUNK_START         1 << 0
-#define CHUNK_END           1 << 1
-#define PARENT              1 << 2
-#define ROOT                1 << 3
-#define KEYED_HASH          1 << 4
-#define DERIVE_KEY_CONTEXT  1 << 5
-#define DERIVE_KEY_MATERIAL 1 << 6
-#define BLAKE3_OUT_LEN      32
-#define BLAKE3_KEY_LEN      32
-#define BLAKE3_BLOCK_LEN    64
-#define BLAKE3_CHUNK_LEN    1024
-#define SMALL_BLOCK_SIZE    1024
+#define CEIL_DIV(x, y) ((int)ceil((double)(x) / (y)))
 
-#define CHUNK_SIZE          1024
-#define CHUNK_SIZE_LOG      10
-
-#define CEIL_DIV(x, y)      ((int)ceil((double)(x) / (y)))
-
-#define MIN(x, y)           ((x) < (y) ? (x) : (y))
-#define MAX(x, y)           ((x) < (y) ? (y) : (x))
+#define MIN(x, y)      ((x) < (y) ? (x) : (y))
+#define MAX(x, y)      ((x) < (y) ? (y) : (x))
 
 #define PRINT_WITH_NEWLINE(str, n)                                                                 \
     do {                                                                                           \
@@ -47,9 +32,10 @@
 #else
 #define myprintf(...) (void)0
 #endif
-int  get_num_chunks(char *filename);
-int  set_num_threads(int num_chunks);
-int  next_multiple_of_64(int n);
+
+int get_num_chunks(char *filename);
+int set_num_threads(int num_chunks);
+int next_multiple_of_64(int n);
 
 void words_from_little_endian_bytes(const void *bytes, size_t bytes_len, uint32_t *out);
 void compress(const uint32_t chaining_value[8], const uint32_t block_words[16], uint64_t counter,
