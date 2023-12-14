@@ -6,6 +6,6 @@ set -e
 #SBATCH --output=valgrind.out
 #SBATCH --error=valgrind.err
 
-module load gcc/9.3.0 papi/7.0.1
+module load gcc/11.4.0 papi/7.0.1
 make benchmark_mp
-OMP_NUM_THREADS=8 valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out.txt ./benchmark
+OMP_NUM_THREADS=32 valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out.txt ./benchmark

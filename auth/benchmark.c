@@ -1,12 +1,16 @@
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "myblake.h"
+#include "blake_d.h"
+#include "blake_f.h"
 #include "reference_impl.h"
 #include "sha256.h"
 
 #define REPETITIONS 15
+#define OUTPUT_LEN  256
+
 #ifdef USE_PAPI
 #include <papi.h>
 #endif
@@ -29,9 +33,9 @@ void handle_error(int retval) {
     exit(1);
 }
 #else
-#define PAPI_REGION_BEGIN(name) printf("PAPI not enabled - region %s start\n", name);
+#define PAPI_REGION_BEGIN(name) (void)0;  // printf("PAPI not enabled - region %s start\n", name);
 
-#define PAPI_REGION_END(name)   printf("PAPI not enabled - region %s end\n", name);
+#define PAPI_REGION_END(name)   (void)0;  // printf("PAPI not enabled - region %s end\n", name);
 
 void handle_error() {
     exit(1);
@@ -49,31 +53,45 @@ void run_benchmark_sha(char *filename) {
     PAPI_REGION_BEGIN("sha256");
     calculate_sha256(file);
     PAPI_REGION_END("sha256");
-    printf("[INFO:] SHA256     done\n");
+
     fclose(file);
 }
-void run_benchmark_ref(char *filename) {
-    FILE *file = fopen(filename, "rb");
-    assert(file != NULL);
-    uint8_t *output = malloc(BLAKE3_OUT_LEN);
 
-    // printf("[INFO:] Starting ref BLAKE3 algorithm.. \n");
-    file = fopen(filename, "r");
+void run_benchmark_ref(char *filename) {
+    FILE *file = fopen(filename, "r");
     assert(file != NULL);
+    uint8_t *output = malloc(OUTPUT_LEN);
+    assert(output != NULL);
+
     PAPI_REGION_BEGIN("ref_blake3");
-    blake3(has_key, key, derive_key_context, BLAKE3_OUT_LEN, file, output);
+    blake3(has_key, key, derive_key_context, OUTPUT_LEN, file, output);
     PAPI_REGION_END("ref_blake3");
+
     fclose(file);
-    printf("[INFO:] REF BLAKE3 done\n");
     free(output);
 }
-void run_benchmark_my(char *filename) {
-    uint8_t *output = malloc(BLAKE3_OUT_LEN);
-    // printf("[INFO:] Starting my BLAKE3 algorithm.. \n");
-    PAPI_REGION_BEGIN("my_blake3");
-    myblake(filename, output, BLAKE3_OUT_LEN, has_key, key, derive_key_context, 0);
-    PAPI_REGION_END("my_blake3");
-    printf("[INFO:] MY  BLAKE3 done\n");
+
+void run_benchmark_f(char *filename) {
+    uint8_t *output = malloc(OUTPUT_LEN);
+    assert(output != NULL);
+
+    PAPI_REGION_BEGIN("blake3_f");
+    myblake(filename, output, OUTPUT_LEN, has_key, key, derive_key_context, 0);
+    PAPI_REGION_END("blake3_f");
+
+    free(output);
+}
+
+void run_benchmark_d(char *filename) {
+    uint8_t *output = malloc(OUTPUT_LEN);
+    PAPI_REGION_BEGIN("blake3_d");
+    blake(filename, false, NULL, NULL, output, OUTPUT_LEN,
+#ifdef USE_OPENMP
+        MULTI_THREAD);
+#else
+        SINGLE_THREAD);
+#endif
+    PAPI_REGION_END("blake3_d");
 
     free(output);
 }
@@ -101,60 +119,82 @@ int main(void) {
 
     fclose(sizesFile);
 
-    int   str_len  = strlen(prefix) + 8 * sizeof(char) + strlen(suffix) + 1;
-    char *filename = malloc(str_len);
+    int    str_len  = strlen(prefix) + 8 * sizeof(char) + strlen(suffix) + 1;
+    char **filename = malloc(num_sizes * sizeof(char *));
+    for (size_t i = 0; i < num_sizes; i++) {
+        filename[i] = malloc(str_len * sizeof(char));
+        assert(filename[i] != NULL);
+    }
+
     assert(filename != NULL);
+
+    for (size_t size = 0; size < num_sizes; size++) {
+        memset(filename[size], 0, str_len);
+        strcpy(filename[size], prefix);
+        strcat(filename[size], sizes[size]);
+        strcat(filename[size], suffix);
+    }
 
 #ifdef USE_OPENMP
     int num_avail_threads = omp_get_max_threads();
     omp_set_dynamic(0);
     printf("[INFO:] Max number of threads: %d\n", num_avail_threads);
     for (size_t size = 0; size < num_sizes; size++) {
-        memset(filename, 0, str_len);
-        strcpy(filename, prefix);
-        strcat(filename, sizes[size]);
-        strcat(filename, suffix);
-
         for (int i = 0; i < REPETITIONS; i++) {
-            printf("[INFO:] Running benchmark for %s, %d\n", sizes[size], i);
+            printf("\r[INFO:] Running f_benchmark for %5s, %2d", sizes[size], i);
             omp_set_num_threads(num_avail_threads);
-            run_benchmark_my(filename);
+            // run_benchmark_f(filename[size]);
+            fflush(stdout);
         }
+        printf(" done\n");
+    }
+
+    for (size_t size = 0; size < num_sizes; size++) {
+        for (int i = 0; i < REPETITIONS; i++) {
+            printf("\r[INFO:] Running d_benchmark for %5s, %2d", sizes[size], i);
+            omp_set_num_threads(num_avail_threads);
+            run_benchmark_d(filename[size]);
+            fflush(stdout);
+        }
+        printf(" done\n");
     }
 #else
     for (size_t size = 0; size < num_sizes; size++) {
-        memset(filename, 0, str_len);
-        strcpy(filename, prefix);
-        strcat(filename, sizes[size]);
-        strcat(filename, suffix);
         for (int i = 0; i < REPETITIONS; i++) {
-            printf("[INFO:] Running benchmark for %s, %d\n", sizes[size], i);
-            run_benchmark_my(filename);
+            printf("\r[INFO:] Running f benchmark for %5s, %2d", sizes[size], i);
+            run_benchmark_f(filename[size]);
+            fflush(stdout);
         }
+        printf(" done\n");
+    }
+
+    for (size_t size = 0; size < num_sizes; size++) {
+        for (int i = 0; i < REPETITIONS; i++) {
+            printf("\r[INFO:] Running d benchmark for %5s, %2d", sizes[size], i);
+            run_benchmark_d(filename[size]);
+            fflush(stdout);
+        }
+        printf(" done\n");
+    }
+
+    for (size_t size = 0; size < num_sizes; size++) {
+        for (int i = 0; i < REPETITIONS; i++) {
+            printf("\r[INFO:] Running ref benchmark for %5s, %2d", sizes[size], i);
+            run_benchmark_ref(filename[size]);
+            fflush(stdout);
+        }
+        printf(" done\n");
     }
     for (size_t size = 0; size < num_sizes; size++) {
-        memset(filename, 0, str_len);
-        strcpy(filename, prefix);
-        strcat(filename, sizes[size]);
-        strcat(filename, suffix);
-
         for (int i = 0; i < REPETITIONS; i++) {
-            printf("[INFO:] Running ref benchmark for %s, %d\n", sizes[size], i);
-            run_benchmark_ref(filename);
+            printf("\r[INFO:] Running sha benchmark for %5s, %2d", sizes[size], i);
+            run_benchmark_sha(filename[size]);
+            fflush(stdout);
         }
-    }
-    for (size_t size = 0; size < num_sizes; size++) {
-        memset(filename, 0, str_len);
-        strcpy(filename, prefix);
-        strcat(filename, sizes[size]);
-        strcat(filename, suffix);
-
-        for (int i = 0; i < REPETITIONS; i++) {
-            printf("[INFO:] Running sha benchmark for %s, %d\n", sizes[size], i);
-            run_benchmark_sha(filename);
-        }
+        printf(" done\n");
     }
 #endif
+    for (size_t i = 0; i < num_sizes; i++) free(filename[i]);
     free(filename);
     return 0;
 }
