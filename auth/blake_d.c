@@ -3,7 +3,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/_types/_size_t.h>
+// #include <sys/_types/_size_t.h>
 #include <sys/types.h>
 
 void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool has_key,

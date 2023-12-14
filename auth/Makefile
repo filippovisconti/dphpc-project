@@ -1,18 +1,20 @@
 FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O2 -march=native -fopenmp
-FLAGS += -g3 -ggdb
+FLAGS += -g -ggdb
 # FLAGS+=-DBENCHMARK
 # FLAGS+=-DDEBUG
 INCLUDES := -I include
 UNAME := $(shell uname -m)
 CC := gcc
-TEST_SOURCES := myblake.c blake.c quick_test.c utils.c
-BLAKE_SOURCES := myblake.c utils.c
-BENCHMARK_SOURCES := benchmark.c myblake.c blake.c sha256.c utils.c
-NUM_THREADS := 32
+SRC =  blake_f.c blake_d.c blake_ref.c utils.c
+
+TEST_SOURCES := $(SRC) quick_test.c
+BLAKE_SOURCES := blake_f.c utils.c
+BENCHMARK_SOURCES := benchmark.c $(SRC) sha256.c
+NUM_THREADS := 4
 
 test: clean
 	$(CC) $(FLAGS)  -o test $(TEST_SOURCES) $(INCLUDES) -lm
-	# ./test
+	./test
 
 test_mp: clean
 	$(CC) $(FLAGS) -DUSE_OPENMP -o test $(TEST_SOURCES) $(INCLUDES) -lm
@@ -42,22 +44,23 @@ benchmark_mp: clean
 	OMP_NUM_THREADS=$(NUM_THREADS) ./benchmark
 
 clean:
-	@rm -fR blake *.dSYM/ test benchmark
+	@rm -fR blake *.dSYM/ test benchmark dbg*
 
 else
 
 # ------------- running on x86_64 -------------
-# FLAGS += -DUSE_PAPI
+FLAGS += -DUSE_PAPI
 PAPI_EVENTS := PAPI_TOT_CYC
 PAPI_OUTPUT_DIRECTORY := "measurements"
 PAPI_DEBUG := HIGHLEVEL
-PAPI_EXPORT := PAPI_EVENTS="$(PAPI_EVENTS)"
+PAPI_EXPORT := PAPI_EVENTS="$(PAPI_EVENTS)" LD_LIBRARY_PATH=$(LD_LIBRARY_PATH)
 PAPI_EXPORT += PAPI_OUTPUT_DIRECTORY=$(PAPI_OUTPUT_DIRECTORY) PAPI_DEBUG=${PAPI_DEBUG}
 # PAPI_EXPORT := LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) PAPI_EVENTS="$(PAPI_EVENTS)"
 
-INCLUDES := -I include
-# INCLUDES :=  -I include -I/${PAPI_DIR}/include  -I${CPATH}
-L := -L${LD_LIBRARY_PATH} -L/${PAPI_DIR}/lib -lm -lpapi
+INCLUDES :=  -I include  -I${CPATH}
+# L := -L${LD_LIBRARY_PATH} -L/${PAPI_DIR}/lib -lm -lpapi
+# L := -L${LD_LIBRARY_PATH} -lm -lpapi
+L := -lm -lpapi
 
 blake:
 	$(CC) $(FLAGS) -o blake $(BLAKE_SOURCES) $(INCLUDES)
