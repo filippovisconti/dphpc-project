@@ -9,8 +9,6 @@
 #define BLAKE3_BLOCK_CAP 16
 #define CACHE_LINE_SIZE  64
 
-typedef enum { SINGLE_THREAD, MULTI_THREAD } Mode;
-
 typedef struct chunk_state {
     char block[BLAKE3_CHUNK_LEN];
 } chunk_state;
@@ -136,4 +134,4 @@ inline static void compress(const uint32_t chaining_value[8], const uint32_t blo
 }
 
 void blake(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY_LEN],
-    const char* key_context, uint8_t* output, size_t out_len, Mode mode);
+    const char* key_context, uint8_t* output, size_t out_len);
