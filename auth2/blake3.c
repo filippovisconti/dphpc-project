@@ -105,7 +105,7 @@ void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool h
         }
 
     if (nchunks == 1) {
-        memcpy(master_chaining_value, compression_outputs, sizeof(uint32_t) * 16);
+        memcpy(master_chaining_value, compression_outputs, sizeof(uint32_t) * 8);
         words_from_little_endian_bytes(input_chunks->block + (15*BLAKE3_BLOCK_LEN), BLAKE3_BLOCK_LEN, compression_outputs);
     }
 
@@ -230,7 +230,7 @@ void blake3_chunk_state_slow_hasher(chunk_state* input_chunks, size_t nchunks, b
         }
 
     if (nchunks == 1) {
-        memcpy(master_chaining_value, compression_outputs, sizeof(uint32_t) * 16);
+        memcpy(master_chaining_value, compression_outputs, sizeof(uint32_t) * 8);
         words_from_little_endian_bytes(input_chunks->block + (15*BLAKE3_BLOCK_LEN), BLAKE3_BLOCK_LEN, compression_outputs);
     }
 
