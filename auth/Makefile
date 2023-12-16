@@ -1,55 +1,81 @@
-FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O0 -march=native
-INCLUDES := -I include -lm -fopenmp
+FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O2 -march=native -fopenmp
+FLAGS += -g3 -ggdb
+# FLAGS+=-DBENCHMARK
+# FLAGS+=-DDEBUG
+INCLUDES := -I include
 UNAME := $(shell uname -m)
+CC := gcc
+TEST_SOURCES := myblake.c blake.c quick_test.c utils.c
+BLAKE_SOURCES := myblake.c utils.c
+BENCHMARK_SOURCES := benchmark.c myblake.c blake.c sha256.c utils.c
+NUM_THREADS := 32
 
-all: compile
+test: clean
+	$(CC) $(FLAGS)  -o test $(TEST_SOURCES) $(INCLUDES) -lm
+	# ./test
 
-# FILES:= $(shell find . -name \*.c)
-FILES:= blake.c benchmark.c sha256.c
+test_mp: clean
+	$(CC) $(FLAGS) -DUSE_OPENMP -o test $(TEST_SOURCES) $(INCLUDES) -lm
+	OMP_NUM_THREADS=$(NUM_THREADS) ./test
+
 ifeq ($(UNAME), arm64)
 CC := gcc-13
 
-test: clean
-	$(CC) $(FLAGS) -ggdb -o test blake.c quick_test.c $(INCLUDES)
-	./test
-
 blake: clean
-	@$(CC) $(FLAGS) -g -o blake myblake.c $(INCLUDES)
+	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -o blake $(BLAKE_SOURCES) $(INCLUDES)
+
+blake_mp: clean
+	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -DUSE_OPENMP  -o blake $(BLAKE_SOURCES) $(INCLUDES)
+
+run: blake
 	./blake
 
-run: compile 
-	./main_arm
+run_mp: blake_mp
+	OMP_NUM_THREADS=$(NUM_THREADS) ./blake
 
-compile: clean
-	@echo "No PAPI support for arm64"
-	@$(CC) $(FLAGS) -o main_arm $(FILES) $(INCLUDES)
+benchmark: clean
+	$(CC) $(FLAGS) -DBENCHMARK -o benchmark $(BENCHMARK_SOURCES) $(INCLUDES)
+	./benchmark
 
-debug:
-	$(CC) $(FLAGS) -g -o main_arm $(FILES) $(INCLUDES)
-	
+benchmark_mp: clean
+	$(CC) $(FLAGS) -DBENCHMARK -DUSE_OPENMP -o benchmark $(BENCHMARK_SOURCES) $(INCLUDES)
+	OMP_NUM_THREADS=$(NUM_THREADS) ./benchmark
+
 clean:
-	@rm -fR main_arm blake main_arm.dSYM/ test test.dSYM/ blake.dSYM
+	@rm -fR blake *.dSYM/ test benchmark
 
 else
-CC := gcc
 
+# ------------- running on x86_64 -------------
+# FLAGS += -DUSE_PAPI
+PAPI_EVENTS := PAPI_TOT_CYC
+PAPI_OUTPUT_DIRECTORY := "measurements"
+PAPI_DEBUG := HIGHLEVEL
+PAPI_EXPORT := PAPI_EVENTS="$(PAPI_EVENTS)"
+PAPI_EXPORT += PAPI_OUTPUT_DIRECTORY=$(PAPI_OUTPUT_DIRECTORY) PAPI_DEBUG=${PAPI_DEBUG}
+# PAPI_EXPORT := LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) PAPI_EVENTS="$(PAPI_EVENTS)"
 
-PAPI_EVENTS:="PAPI_TOT_INS,PAPI_TOT_CYC,PAPI_VEC_SP,PAPI_VEC_DP"
-PAPI_OUTPUT_DIRECTORY="measurements"
-PAPI_DEBUG=HIGHLEVEL
-PAPI_EXPORT := LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) PAPI_EVENTS="${PAPI_EVENTS}" PAPI_OUTPUT_DIRECTORY=${PAPI_OUTPUT_DIRECTORY} PAPI_DEBUG=${PAPI_DEBUG}
-
-INCLUDES := -I${CPATH} -I include -L${LD_LIBRARY_PATH} -lm
-
+INCLUDES := -I include
+# INCLUDES :=  -I include -I/${PAPI_DIR}/include  -I${CPATH}
+L := -L${LD_LIBRARY_PATH} -L/${PAPI_DIR}/lib -lm -lpapi
 
 blake:
-	$(CC) $(FLAGS) -o blake myblake.c $(INCLUDES)
-print:
-	python3 ${PAPI_ROOT}/bin/papi_hl_output_writer.py --source measurements/papi_hl_output --notation=derived --type=summary > papi.log
-	
-run: debug
-	$(PAPI_EXPORT) ./main
+	$(CC) $(FLAGS) -o blake $(BLAKE_SOURCES) $(INCLUDES)
 
+print:
+	python3 ${PAPI_ROOT}/bin/papi_hl_output_writer.py --source measurements/papi_* --notation=derived --type=detail > papi.log
+
+benchmark: clean
+	$(CC) $(FLAGS) -DBENCHMARK $(INCLUDES) -o benchmark $(BENCHMARK_SOURCES) $(L)
+
+benchmark_mp: clean
+	$(CC) $(FLAGS) -DBENCHMARK -DUSE_OPENMP $(INCLUDES) -o benchmark $(BENCHMARK_SOURCES) $(L)
+
+run: benchmark
+	$(PAPI_EXPORT) ./benchmark
+
+run_mp: benchmark_mp
+	OMP_NUM_THREADS=$(NUM_THREADS) $(PAPI_EXPORT) ./benchmark
 
 compile: clean
 	echo "Compiling with PAPI on for x86_64"
@@ -57,31 +83,29 @@ compile: clean
 
 debug: clean
 	$(CC) $(FLAGS) -ggdb -g -o main $(INCLUDES) -lpapi $(FILES)
-	
+
 clean:
-	rm -fR main papi_output/* 
+	rm -fR main benchmark test slurm-*
 
 endif
 
+all: blake
+
+gen:
+	sh gen_test_data.sh
+
+# USER=root
+# REMOTE_HOST := priv-testbench
 USER=fvisconti
-REMOTE_HOST = euler
-REMOTE_DIR = /cluster/home/${USER}
-TO_COPY = Makefile *.c *.txt include *.json batch_script.sh gen_test_data.sh
+REMOTE_HOST := euler
+REMOTE_DIR := /cluster/home/${USER}/blake
+TO_COPY := Makefile *.c include *.json *.sh gen.py input_sizes.txt
 
 ssh-copy:
 	@rsync -avz $(TO_COPY) $(USER)@$(REMOTE_HOST):$(REMOTE_DIR)
 
 ssh-download:
-	@rsync -avz $(USER)@$(REMOTE_HOST):$(REMOTE_DIR)/papi_output ./papi_output
+	rsync -avz $(USER)@$(REMOTE_HOST):$(REMOTE_DIR)/measurements/ ./papi_output
 
-ssh-debug:
-	# module load gcc/9.3.0 papi/7.0.1
-	# export OMP_NUM_THREADS=30
-	@ssh $(USER)@$(REMOTE_HOST) -t "OMP_NUM_THREADS=30 sbatch batch_script.sh"
-
-
-# gprof:
-# 	rm -f gmon.out perf.data* main_adv analysis.txt
-# 	gcc -O3 -march=native -pg -o main_adv operator_tree.c tree_adv.c tree_helpers.c -I -lm
-# 	taskset --cpu-list 0 ./main_adv
-# 	gprof main_adv gmon.out > analysis.txt
+ssh-run:
+	@ssh $(USER)@$(REMOTE_HOST) -t "sbatch batch_script.sh"

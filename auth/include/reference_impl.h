@@ -18,9 +18,8 @@
 #define BLAKE3_CHUNK_LEN    1024
 #define SMALL_BLOCK_SIZE    1024
 
-// #define M_LOG2E             1.44269504088896340736  // log2(e)
-#define CHUNK_SIZE     1024
-#define CHUNK_SIZE_LOG 10
+#define CHUNK_SIZE          1024
+#define CHUNK_SIZE_LOG      10
 
 // This struct is private.
 typedef struct _blake3_chunk_state {

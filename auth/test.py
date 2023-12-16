@@ -19,6 +19,11 @@ def test_input(length: int):
     return ret
 
 
+def write_test_input(length: int):
+    with open("test_input", "wb") as f:
+        f.write(test_input(length))
+
+
 def test_run(input_len: int, flags: list[str]) -> str:
     res: bytes = subprocess.run(args=["./blake3"] + flags, input=test_input(
         length=input_len), stdout=subprocess.PIPE, check=True).stdout

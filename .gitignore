@@ -1,3 +1,4 @@
+test_inputs
 
 .vscode/
 
@@ -298,6 +299,15 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/python
 
 auth/input_data/
+
+.clangd
+
+.clang
+
+auth/test
+
+auth/Makefile_old
+
 enc/input_data/
 enc/bin
 enc/output_data/*_out
