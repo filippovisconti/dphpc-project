@@ -1,7 +1,9 @@
 import json
+import os
 import numpy as np
-from pprint import pprint
 import matplotlib.pyplot as plt
+
+repetitions: int = 15
 
 
 def load_data_from_json(json_file):
@@ -10,23 +12,7 @@ def load_data_from_json(json_file):
     return data
 
 
-def calculate_median(lst: list[int]):
-    lst.sort()
-    n = len(lst)
-    if n % 2 == 0:
-        return (lst[n//2] + lst[n//2-1]) / 2
-    return lst[n//2]
-
-
-# def mean_confidence_interval(data, confidence=0.95):
-#     a = 1.0 * np.array(data)
-#     n = len(a)
-#     m, se = np.mean(a), scipy.stats.sem(a)
-#     h = se * scipy.stats.t.ppf((1 + confidence) / 2., n-1)
-#     return m, m-h, m+h
-
-
-def plot_data(data, single_thread=True, num_threads=1):
+def grab_input_sizes():
     with open("input_sizes.txt", 'r') as file:
         input_sizes = file.read().splitlines()
 
@@ -47,17 +33,22 @@ def plot_data(data, single_thread=True, num_threads=1):
             size *= 1024 * 1024 * 1024
 
         input_sizes.append(size)
+    return input_sizes, raw_input_sizes
 
-    plt.style.use("ggplot")
-    plt.figure(figsize=(13, 12))
-    _, ax = plt.subplots(dpi=600)
+
+def plot_data(data, single_thread=True, num_threads=1):
+
+    input_sizes, raw_input_sizes = grab_input_sizes()
 
     func_names = ["blake3_f", "blake3_d", "ref_blake3", "sha256"]
     if not single_thread:
         func_names = ["blake3_f", "blake3_d"]
-    total_runs = len(data["threads"]["0"]["regions"]) // 15 // len(func_names)
+
+    total_runs = len(data["threads"]["0"]["regions"]
+                     ) // repetitions // len(func_names)
     print("total runs per function", total_runs)
-    if ((total_runs * len(func_names) * 15) != len(data["threads"]["0"]["regions"])):
+
+    if ((total_runs * len(func_names) * repetitions) != len(data["threads"]["0"]["regions"])):
         raise ValueError("Invalid number of runs")
 
     medians = []
@@ -67,22 +58,19 @@ def plot_data(data, single_thread=True, num_threads=1):
         tmp_lst = []
         cycles = np.array(
             [int(data["threads"]["0"]["regions"][str(i)]["PAPI_TOT_CYC"])
-             for i in range(total_runs*15*k, total_runs*15*(k+1))])
-        for i in range(len(cycles)//15):
-            arr = np.array(cycles[15*i:15*(i+1)])
-            print("cycles:")
-            print(arr.tolist())
-            arr = input_sizes[i]/np.array(cycles[15*i:15*(i+1)])
-            print(arr.tolist())
+             for i in range(total_runs*repetitions*k, total_runs*repetitions*(k+1))])
+        for i in range(len(cycles)//repetitions):
+            arr = np.array(cycles[repetitions*i:repetitions*(i+1)])
+            arr = input_sizes[i] / arr
             median = np.median(arr)
-            print("Orig Median", median)
-            print("size", input_sizes[i])
             std_dev = np.std(arr)
-            print("Std Dev", std_dev)
             tmp_lst.append(median)
             devs.append(std_dev)
         medians.append(tmp_lst)
 
+    plt.style.use("ggplot")
+    plt.figure(figsize=(13, 12))
+    _, ax = plt.subplots(dpi=600)
     for k, func_name in enumerate(func_names):
         print("Output", func_name)
         ax.errorbar(
@@ -99,8 +87,11 @@ def plot_data(data, single_thread=True, num_threads=1):
     plt.xticks(rotation=90)
 
     ax.legend()
-    plt.savefig(
-        f"plot{'_multi' if not single_thread else ''}_{num_threads}c.png", bbox_inches="tight", pad_inches=0.1)
+    if not os.path.exists("figures"):
+        os.makedirs("figures")
+
+    filename: str = f"figures/plot{'_multi' if not single_thread else ''}_{num_threads}c.png"
+    plt.savefig(filename, bbox_inches="tight", pad_inches=0.1)
 
 
 if __name__ == "__main__":
