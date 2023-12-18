@@ -7,8 +7,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-core=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=36
-#SBATCH --mem=120GB
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=320GB
 #SBATCH --partition=normal
 #SBATCH --constraint=mc
 #SBATCH --hint=nomultithread

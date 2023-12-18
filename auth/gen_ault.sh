@@ -5,9 +5,9 @@ set -x
 echo "Generating test data..."
 input="./input_sizes.txt"
 
-PATH=/scratch/fviscont/blake
+B_PATH=/scratch/fviscont/blake
 
-mkdir -p $PATH/input_data
+mkdir -p $B_PATH/input_data
 
 while read -r line
 do
@@ -16,7 +16,7 @@ do
   #skip line starting with #
   [[ $line = \#* ]] && echo "Skipping $line" && continue
   # skip if file already exists
-  [[ -f "$PATH/input_data/input_$line.txt" ]] && echo "File exists $line" && continue
+  [[ -f "$B_PATH/input_data/input_$line.txt" ]] && echo "File exists $line" && continue
 
   fsize=$(echo "$line" | grep -o '[0-9]\+')
   unit=$(echo "$line" | grep -o '[a-zA-Z]\+')
@@ -30,7 +30,7 @@ do
     fsize=$(($fsize * 1024))
   fi
 
-  dd if=/dev/urandom of=$PATH/input_data/input_$line.txt bs=$base count=$fsize
+  dd if=/dev/urandom of=$B_PATH/input_data/input_$line.txt bs=$base count=$fsize
 
   echo "$line"
 done < "$input"

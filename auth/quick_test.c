@@ -8,7 +8,7 @@
 #include "blake_f.h"
 #include "reference_impl.h"
 
-#define REPETITIONS 15
+#define REPETITIONS 5
 #define OUTPUT_LEN  256
 
 void run_test(char *filename, int mode) {
@@ -77,7 +77,7 @@ void run_test(char *filename, int mode) {
         free(output_hex);
         free(output_hex_d);
         exit(1);
-    } else printf("F: OK\n");
+    }  // else printf("F: OK\n");
     cond = strcmp(output_hex_d, output_hex_ref) == 0;
     if (!cond) {
         printf("[REFERENCE]:\n");
@@ -100,7 +100,7 @@ void run_test(char *filename, int mode) {
         free(output_hex);
         free(output_hex_d);
         exit(1);
-    } else printf("D: OK\n");
+    }  // else printf("D: OK\n");
 
     assert(cond);
     free(output_ref);

@@ -1,5 +1,6 @@
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -32,6 +33,19 @@ void handle_error(int retval) {
     printf("PAPI error %d: %s\n", retval, PAPI_strerror(retval));
     exit(1);
 }
+#elif defined(__x86_64__)
+#include <x86intrin.h>
+unsigned int ui;
+uint64_t     start, end;
+#define PAPI_REGION_BEGIN(name)                                                                    \
+    do { start = __rdtscp(&ui); } while (0)
+
+#define PAPI_REGION_END(name)                                                                      \
+    do {                                                                                           \
+        end = __rdtscp(&ui);                                                                       \
+        fprintf(file, "%llu,", (long long)end - start);                                          \
+        fflush(file);                                                                              \
+    } while (0)
 #else
 #define PAPI_REGION_BEGIN(name) (void)0;  // printf("PAPI not enabled - region %s start\n", name);
 
@@ -41,7 +55,7 @@ void handle_error() {
     exit(1);
 }
 #endif
-
+FILE       *file;
 uint8_t     key[BLAKE3_KEY_LEN] = {0};
 bool        has_key             = false;
 const char *derive_key_context  = NULL;
@@ -133,6 +147,7 @@ int main(void) {
     }
 
 #ifdef USE_OPENMP
+    file                  = fopen("blake3_f.csv", "w");
     int num_avail_threads = omp_get_max_threads();
     omp_set_dynamic(0);
     printf("[INFO:] Max number of threads: %d\n", num_avail_threads);
@@ -144,8 +159,11 @@ int main(void) {
             fflush(stdout);
         }
         printf(" done\n");
+        fprintf(file, "\n");
     }
+    fclose(file);
 
+    file = fopen("blake3_d.csv", "w");
     for (size_t size = 0; size < num_sizes; size++) {
         for (int i = 0; i < REPETITIONS; i++) {
             printf("\r[INFO:] Running d_benchmark for %5s, %2d", sizes[size], i);
@@ -154,8 +172,11 @@ int main(void) {
             fflush(stdout);
         }
         printf(" done\n");
+        fprintf(file, "\n");
     }
+    fclose(file);
 #else
+    file = fopen("sha256.csv", "w");
     for (size_t size = 0; size < num_sizes; size++) {
         for (int i = 0; i < REPETITIONS; i++) {
             printf("\r[INFO:] Running f benchmark for %5s, %2d", sizes[size], i);
@@ -163,8 +184,11 @@ int main(void) {
             fflush(stdout);
         }
         printf(" done\n");
+        fprintf(file, "\n");
     }
+    fclose(file);
 
+    file = fopen("blake3_d.csv", "w");
     for (size_t size = 0; size < num_sizes; size++) {
         for (int i = 0; i < REPETITIONS; i++) {
             printf("\r[INFO:] Running d benchmark for %5s, %2d", sizes[size], i);
@@ -172,8 +196,11 @@ int main(void) {
             fflush(stdout);
         }
         printf(" done\n");
+        fprintf(file, "\n");
     }
+    fclose(file);
 
+    file = fopen("blake3_ref.csv", "w");
     for (size_t size = 0; size < num_sizes; size++) {
         for (int i = 0; i < REPETITIONS; i++) {
             printf("\r[INFO:] Running ref benchmark for %5s, %2d", sizes[size], i);
@@ -181,7 +208,11 @@ int main(void) {
             fflush(stdout);
         }
         printf(" done\n");
+        fprintf(file, "\n");
     }
+    fclose(file);
+
+    file = fopen("sha256.csv", "w");
     for (size_t size = 0; size < num_sizes; size++) {
         for (int i = 0; i < REPETITIONS; i++) {
             printf("\r[INFO:] Running sha benchmark for %5s, %2d", sizes[size], i);
@@ -189,7 +220,9 @@ int main(void) {
             fflush(stdout);
         }
         printf(" done\n");
+        fprintf(file, "\n");
     }
+    fclose(file);
 #endif
     for (size_t i = 0; i < num_sizes; i++) free(filename[i]);
     free(filename);
