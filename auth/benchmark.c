@@ -84,6 +84,8 @@ void run_benchmark_f(char *filename) {
 
 void run_benchmark_d(char *filename) {
     uint8_t *output = malloc(OUTPUT_LEN);
+    assert(output != NULL);
+
     PAPI_REGION_BEGIN("blake3_d");
     blake(filename, false, NULL, NULL, output, OUTPUT_LEN,
 #ifdef USE_OPENMP
@@ -143,7 +145,7 @@ int main(void) {
         for (int i = 0; i < REPETITIONS; i++) {
             printf("\r[INFO:] Running f_benchmark for %5s, %2d", sizes[size], i);
             omp_set_num_threads(num_avail_threads);
-            // run_benchmark_f(filename[size]);
+            run_benchmark_f(filename[size]);
             fflush(stdout);
         }
         printf(" done\n");
