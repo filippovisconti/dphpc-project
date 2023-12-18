@@ -78,7 +78,7 @@ void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool h
 #ifdef USE_OPENMP
 #pragma omp parallel for
 #endif
-    for (int i = 0; i < nchunks; i++) {
+    for (size_t i = 0; i < nchunks; i++) {
             chunk_state* self = (input_chunks + i);
 
             uint32_t chaining_value[16];

@@ -87,12 +87,7 @@ void run_benchmark_d(char *filename) {
     assert(output != NULL);
 
     PAPI_REGION_BEGIN("blake3_d");
-    blake(filename, false, NULL, NULL, output, OUTPUT_LEN,
-#ifdef USE_OPENMP
-        MULTI_THREAD);
-#else
-        SINGLE_THREAD);
-#endif
+    blake(filename, false, NULL, NULL, output, OUTPUT_LEN);
     PAPI_REGION_END("blake3_d");
 
     free(output);

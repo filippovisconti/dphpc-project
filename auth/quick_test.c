@@ -42,12 +42,7 @@ void run_test(char *filename, int mode) {
     myprintf("************** F BLAKE3 STOUT **********************\n");
     myblake(filename, output_my, OUTPUT_LEN, has_key, key, derive_key_context, 0);
     myprintf("************** D BLAKE3 STOUT **********************\n");
-    blake(filename, false, NULL, NULL, output_d, OUTPUT_LEN,
-#ifdef USE_OPENMP
-        MULTI_THREAD);
-#else
-        SINGLE_THREAD);
-#endif
+    blake(filename, false, NULL, NULL, output_d, OUTPUT_LEN);
     // printf("****************************************************\n");
     free(derive_key_context);
     char *output_hex_ref = malloc(OUTPUT_LEN * 2 + 1);

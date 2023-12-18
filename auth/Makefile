@@ -1,104 +1,68 @@
-FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O2 -march=native -fopenmp
-FLAGS += -g -ggdb
-# FLAGS+=-DBENCHMARK
+FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O3 -march=native
 # FLAGS+=-DDEBUG
+
 INCLUDES := -I include
+LIBS := -lm
 UNAME := $(shell uname -m)
-CC := gcc
+CC := icc
 SRC =  blake_f.c blake_d.c blake_ref.c utils.c
 
 TEST_SOURCES := $(SRC) quick_test.c
 BLAKE_SOURCES := blake_f.c utils.c
 BENCHMARK_SOURCES := benchmark.c $(SRC) sha256.c
-NUM_THREADS := 4
-
-test: clean
-	$(CC) $(FLAGS)  -o test $(TEST_SOURCES) $(INCLUDES) -lm
-	./test
-
-test_mp: clean
-	$(CC) $(FLAGS) -DUSE_OPENMP -o test $(TEST_SOURCES) $(INCLUDES) -lm
-	OMP_NUM_THREADS=$(NUM_THREADS) ./test
+NUM_THREADS := 32
 
 ifeq ($(UNAME), arm64)
 CC := gcc-13
-
-blake: clean
-	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -o blake $(BLAKE_SOURCES) $(INCLUDES)
-
-blake_mp: clean
-	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -DUSE_OPENMP  -o blake $(BLAKE_SOURCES) $(INCLUDES)
-
-run: blake
-	./blake
-
-run_mp: blake_mp
-	OMP_NUM_THREADS=$(NUM_THREADS) ./blake
-
-benchmark: clean
-	$(CC) $(FLAGS) -DBENCHMARK -o benchmark $(BENCHMARK_SOURCES) $(INCLUDES)
-	./benchmark
-
-benchmark_mp: clean
-	$(CC) $(FLAGS) -DBENCHMARK -DUSE_OPENMP -o benchmark $(BENCHMARK_SOURCES) $(INCLUDES)
-	OMP_NUM_THREADS=$(NUM_THREADS) ./benchmark
-
-clean:
-	@rm -fR blake *.dSYM/ test benchmark dbg*
+FLAGS += -fopenmp
 
 else
-
-# ------------- running on x86_64 -------------
-FLAGS += -DUSE_PAPI
+FLAGS += -qopenmp -DUSE_PAPI
+INCLUDES += -I$(CPATH)
+#maybe CPATH not needed
 PAPI_EVENTS := PAPI_TOT_CYC
 PAPI_OUTPUT_DIRECTORY := "measurements"
 PAPI_DEBUG := HIGHLEVEL
 PAPI_EXPORT := PAPI_EVENTS="$(PAPI_EVENTS)" LD_LIBRARY_PATH=$(LD_LIBRARY_PATH)
 PAPI_EXPORT += PAPI_OUTPUT_DIRECTORY=$(PAPI_OUTPUT_DIRECTORY) PAPI_DEBUG=${PAPI_DEBUG}
-# PAPI_EXPORT := LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) PAPI_EVENTS="$(PAPI_EVENTS)"
-
-INCLUDES :=  -I include  -I${CPATH}
-# L := -L${LD_LIBRARY_PATH} -L/${PAPI_DIR}/lib -lm -lpapi
-# L := -L${LD_LIBRARY_PATH} -lm -lpapi
-L := -lm -lpapi
-
-blake:
-	$(CC) $(FLAGS) -o blake $(BLAKE_SOURCES) $(INCLUDES)
-
-print:
-	python3 ${PAPI_ROOT}/bin/papi_hl_output_writer.py --source measurements/papi_* --notation=derived --type=detail > papi.log
-
-benchmark: clean
-	$(CC) $(FLAGS) -DBENCHMARK $(INCLUDES) -o benchmark $(BENCHMARK_SOURCES) $(L)
-
-benchmark_mp: clean
-	$(CC) $(FLAGS) -DBENCHMARK -DUSE_OPENMP $(INCLUDES) -o benchmark $(BENCHMARK_SOURCES) $(L)
-
-run: benchmark
-	$(PAPI_EXPORT) ./benchmark
-
-run_mp: benchmark_mp
-	OMP_NUM_THREADS=$(NUM_THREADS) $(PAPI_EXPORT) ./benchmark
-
-compile: clean
-	echo "Compiling with PAPI on for x86_64"
-	$(CC) $(FLAGS) -o main $(INCLUDES) -lpapi $(FILES)
-
-debug: clean
-	$(CC) $(FLAGS) -ggdb -g -o main $(INCLUDES) -lpapi $(FILES)
-
-clean:
-	rm -fR main benchmark test slurm-*
-
+L += -lpapi
 endif
 
-all: blake
+# ------------ data generation ---------------
+gen_sh:
+	@mkdir -p input_data
+	bash gen.sh
 
-gen:
-	sh gen_test_data.sh
+gen_py:
+	@mkdir -p input_data
+	python3 gen.py
 
-# USER=root
-# REMOTE_HOST := priv-testbench
+%_mp: FLAGS += -DUSE_OPENMP
+# tests
+test test_mp: FLAGS += -DBENCHMARK
+test test_mp: clean
+	$(CC) $(TEST_SOURCES) $(FLAGS) -o test $(INCLUDES) $(L)
+
+run_test:
+	OMP_NUM_THREADS=$(NUM_THREADS) ./test
+
+# benchmarks
+benchmark benchmark_mp: FLAGS += -DBENCHMARK
+benchmark benchmark_mp: clean
+	$(CC) $(BENCHMARK_SOURCES) -o benchmark $(FLAGS) $(INCLUDES) $(L)
+
+run_benchmark:
+	OMP_NUM_THREADS=$(NUM_THREADS) $(PAPI_EXPORT) ./benchmark
+
+
+
+# run implementations singularly
+
+
+
+clean:
+	@rm -fR blake *.dSYM/ test benchmark main slurm-*
+# ------------ remote host interaction -----------
 USER=fvisconti
 REMOTE_HOST := euler
 REMOTE_DIR := /cluster/home/${USER}/blake
