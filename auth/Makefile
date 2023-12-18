@@ -1,6 +1,4 @@
 FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O3 -march=native
-# FLAGS+=-DDEBUG
-
 INCLUDES := -I include
 LIBS := -lm
 UNAME := $(shell uname -m)
@@ -8,7 +6,7 @@ CC := icc
 SRC =  blake_f.c blake_d.c blake_ref.c utils.c
 
 TEST_SOURCES := $(SRC) quick_test.c
-BLAKE_SOURCES := blake_f.c utils.c
+BLAKE_SOURCES := blake_d.c blake_f.c utils.c main.c
 BENCHMARK_SOURCES := benchmark.c $(SRC) sha256.c
 NUM_THREADS := 32
 
@@ -38,7 +36,9 @@ gen_py:
 	python3 gen.py
 
 %_mp: FLAGS += -DUSE_OPENMP
-# tests
+
+# ------------ tests
+# to silence prints
 test test_mp: FLAGS += -DBENCHMARK
 test test_mp: clean
 	$(CC) $(TEST_SOURCES) $(FLAGS) -o test $(INCLUDES) $(L)
@@ -46,7 +46,7 @@ test test_mp: clean
 run_test:
 	OMP_NUM_THREADS=$(NUM_THREADS) ./test
 
-# benchmarks
+# ------------ benchmarks
 benchmark benchmark_mp: FLAGS += -DBENCHMARK
 benchmark benchmark_mp: clean
 	$(CC) $(BENCHMARK_SOURCES) -o benchmark $(FLAGS) $(INCLUDES) $(L)
@@ -54,11 +54,18 @@ benchmark benchmark_mp: clean
 run_benchmark:
 	OMP_NUM_THREADS=$(NUM_THREADS) $(PAPI_EXPORT) ./benchmark
 
+# ------------ main, combined implementation, auto selection
+blake blake_mp: clean
+	$(CC) $(BLAKE_SOURCES) $(FLAGS) -o blake $(INCLUDES) $(L)
 
+run_main:
+	OMP_NUM_THREADS=$(NUM_THREADS) ./blake
 
-# run implementations singularly
-
-
+# ------------ run implementations singularly
+blake_f: FLAGS += -DMYBLAKE_MAIN
+blake_d: FLAGS += -DDBLAKE_MAIN
+blake_f blake_d: clean
+	$(CC)  $@.c  utils.c $(FLAGS) -o main $(INCLUDES)
 
 clean:
 	@rm -fR blake *.dSYM/ test benchmark main slurm-*

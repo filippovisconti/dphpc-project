@@ -33,7 +33,7 @@ inline static void key_bytes_from_hex(const char *hex_key, uint8_t out[BLAKE3_KE
     }
 }
 
-int get_num_chunks(char *filename) {
+static int dispatch(char *filename) {
     myprintf("using %s\n", filename);
     FILE *input = fopen(filename, "rb");
     assert(input != NULL);
@@ -58,7 +58,7 @@ int main(int argc, char **argv) {
     bool        has_key            = false;
     const char *derive_key_context = NULL;
     size_t      output_len         = BLAKE3_OUT_LEN;
-    char        filename[50]       = {0};
+    char        filename[100]       = {0};
     // This is a toy main function, and we don't bother to check for invalid
     // inputs like negative lengths here.
     while (argc > 1) {
@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
             assert(!has_key);
             derive_key_context = argv[2];
         } else if (strcmp(argv[1], "-f") == 0) {
-            strncpy(filename, argv[2], sizeof(filename));
+            strcpy(filename, argv[2]);
         } else {
             printf("Unknown argument: %s\n", argv[1]);
             return 1;
@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
 
     uint8_t *output = malloc(output_len);
 
-    if (get_num_chunks(filename)) {
+    if (dispatch(filename)) {
         printf("************** FULL TREE **********************\n");
         myblake(filename, output, output_len, has_key, key, derive_key_context, 0);
     } else {
