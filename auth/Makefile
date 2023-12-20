@@ -1,6 +1,6 @@
 FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O3 -march=native
 INCLUDES := -I include
-LIBS := -lm
+L := -lm
 UNAME := $(shell uname -m)
 SRC =  blake_f.c blake_d.c blake_ref.c utils.c
 
@@ -39,7 +39,7 @@ run_test:
 
 # ------------ benchmarks
 benchmark benchmark_mp: FLAGS += -DBENCHMARK
-benchmark benchmark_mp: clean
+benchmark benchmark_mp:
 	$(CC) $(BENCHMARK_SOURCES) -o benchmark $(FLAGS) $(INCLUDES) $(L)
 
 run_benchmark:
@@ -64,7 +64,8 @@ clean:
 USER=fvisconti
 REMOTE_HOST := euler
 REMOTE_DIR := /cluster/home/${USER}/blake
-TO_COPY := Makefile *.c include *.sh gen.py input_sizes.txt
+TO_COPY := Makefile *.c include *.sh gen.py
+#input_sizes.txt
 
 ssh-copy:
 	@rsync -avz $(TO_COPY) $(USER)@$(REMOTE_HOST):$(REMOTE_DIR)

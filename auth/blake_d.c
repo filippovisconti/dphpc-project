@@ -1,10 +1,12 @@
 #include "include/blake_d.h"
 
 #include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-// #include <sys/_types/_size_t.h>
 #include <sys/types.h>
+
+uint64_t MAX_CHUNKS = 128L << 20L;
 
 void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool has_key,
     const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint32_t init_flags,
