@@ -1,4 +1,4 @@
-#include "include/blake_d.h"
+#include "blake_d.h"
 
 #include <errno.h>
 #include <stdint.h>
@@ -73,52 +73,53 @@ void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool h
         for (int i = 0; i < 8; i++) master_chaining_value[i] = IV[i];
     }
 
-    uint32_t* compression_outputs = (uint32_t*) malloc(nchunks * CACHE_LINE_SIZE);
-    int blocks_to_compress = BLAKE3_BLOCK_CAP;
+    uint32_t* compression_outputs = (uint32_t*)malloc(nchunks * CACHE_LINE_SIZE);
+    int       blocks_to_compress  = BLAKE3_BLOCK_CAP;
     // if input is a single chunk, the last block should not be compressed
     if (nchunks == 1) blocks_to_compress -= 1;
 #ifdef USE_OPENMP
 #pragma omp parallel for
 #endif
     for (size_t i = 0; i < nchunks; i++) {
-            chunk_state* self = (input_chunks + i);
+        chunk_state* self = (input_chunks + i);
 
-            uint32_t chaining_value[16];
-            for (int b = 0; b < blocks_to_compress; b++) {
-                uint32_t block_words[16];
-                words_from_little_endian_bytes(self->block + (b*BLAKE3_BLOCK_LEN), BLAKE3_BLOCK_LEN, block_words);
+        uint32_t chaining_value[16];
+        for (int b = 0; b < blocks_to_compress; b++) {
+            uint32_t block_words[16];
+            words_from_little_endian_bytes(
+                self->block + (b * BLAKE3_BLOCK_LEN), BLAKE3_BLOCK_LEN, block_words);
 
-                uint32_t flags = master_flags;
-                if (b == 0) {
-                    for (size_t i = 0; i < 8; i++) chaining_value[i] = *(master_chaining_value + i);
-                    flags |= CHUNK_START;
-                }
-                if (b == BLAKE3_BLOCK_CAP - 1) flags |= CHUNK_END;
-
-                uint32_t out16[16];
-                compress(chaining_value, block_words, i, BLAKE3_BLOCK_LEN, flags, out16);
-                for (size_t i = 0; i < 16; i++) chaining_value[i] = out16[i];
+            uint32_t flags = master_flags;
+            if (b == 0) {
+                for (size_t i = 0; i < 8; i++) chaining_value[i] = *(master_chaining_value + i);
+                flags |= CHUNK_START;
             }
+            if (b == BLAKE3_BLOCK_CAP - 1) flags |= CHUNK_END;
 
-            // TODO: vectorization speed up possible here
-            memcpy(compression_outputs + (i * 16), chaining_value, sizeof(uint32_t) * 16);
+            uint32_t out16[16];
+            compress(chaining_value, block_words, i, BLAKE3_BLOCK_LEN, flags, out16);
+            for (size_t i = 0; i < 16; i++) chaining_value[i] = out16[i];
         }
+
+        // TODO: vectorization speed up possible here
+        memcpy(compression_outputs + (i * 16), chaining_value, sizeof(uint32_t) * 16);
+    }
 
     if (nchunks == 1) {
         memcpy(master_chaining_value, compression_outputs, sizeof(uint32_t) * 8);
-        words_from_little_endian_bytes(input_chunks->block + (15*BLAKE3_BLOCK_LEN),
-            BLAKE3_BLOCK_LEN, compression_outputs);
+        words_from_little_endian_bytes(
+            input_chunks->block + (15 * BLAKE3_BLOCK_LEN), BLAKE3_BLOCK_LEN, compression_outputs);
     }
 
-    free(input_chunks); // no longer needed after compression
+    free(input_chunks);  // no longer needed after compression
 
     // creating parent nodes until root is reached
-    int on_compression_stack = nchunks;
-    uint32_t* next_compression_outputs = (uint32_t*) malloc(on_compression_stack * CACHE_LINE_SIZE);
+    int       on_compression_stack     = nchunks;
+    uint32_t* next_compression_outputs = (uint32_t*)malloc(on_compression_stack * CACHE_LINE_SIZE);
     while (on_compression_stack > 2) {
         int next_on_compression_stack = 0;
         if (on_compression_stack % 2) {
-            memcpy(next_compression_outputs + ((on_compression_stack/2) * 16) ,
+            memcpy(next_compression_outputs + ((on_compression_stack / 2) * 16),
                 compression_outputs + ((on_compression_stack - 1) * 16), sizeof(uint32_t) * 16);
             on_compression_stack--;
             next_on_compression_stack++;
@@ -128,7 +129,7 @@ void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool h
 #ifdef USE_OPENMP
 #pragma omp parallel for reduction(+ : next_on_compression_stack)
 #endif
-        for (int i = 0; i < on_compression_stack; i+=2) {
+        for (int i = 0; i < on_compression_stack; i += 2) {
             // create parents
             uint32_t parent_words[16];
             // left child
@@ -139,7 +140,7 @@ void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool h
             uint32_t out16[16];
             compress(master_chaining_value, parent_words, 0, BLAKE3_BLOCK_LEN,
                 master_flags | PARENT, out16);
-            memcpy(next_compression_outputs + (i/2 * 16), out16, sizeof(uint32_t) * 16);
+            memcpy(next_compression_outputs + (i / 2 * 16), out16, sizeof(uint32_t) * 16);
             next_on_compression_stack++;
         }
 
@@ -165,13 +166,13 @@ void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool h
     free(compression_outputs);
 
     uint64_t output_block_counter = 0;
-    void *out = output;
-    uint8_t *out_u8 = (uint8_t *)out;
+    void*    out                  = output;
+    uint8_t* out_u8               = (uint8_t*)out;
 
     while (out_len > 0) {
         uint32_t words[16];
-        compress(master_chaining_value, root_words, output_block_counter,
-            BLAKE3_BLOCK_LEN, flags | ROOT, words);
+        compress(master_chaining_value, root_words, output_block_counter, BLAKE3_BLOCK_LEN,
+            flags | ROOT, words);
         for (size_t word = 0; word < 16; word++) {
             for (int byte = 0; byte < 4; byte++) {
                 if (out_len == 0) { break; }

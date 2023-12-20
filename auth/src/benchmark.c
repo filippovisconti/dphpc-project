@@ -33,7 +33,7 @@ void handle_error(int retval) {
     printf("PAPI error %d: %s\n", retval, PAPI_strerror(retval));
     exit(1);
 }
-#elif defined(__x86_64__)
+#else
 #include <x86intrin.h>
 unsigned int ui;
 uint64_t     start, end;
@@ -46,19 +46,15 @@ uint64_t     start, end;
         fprintf(file, "%llu,", (long long)end - start);                                            \
         fflush(file);                                                                              \
     } while (0)
-#else
-#define PAPI_REGION_BEGIN(name) (void)0;  // printf("PAPI not enabled - region %s start\n", name);
-
-#define PAPI_REGION_END(name)   (void)0;  // printf("PAPI not enabled - region %s end\n", name);
-
-void handle_error() {
-    exit(1);
-}
 #endif
+
+// ------ GLOBAL VARIABLES ------
 FILE       *file;
 uint8_t     key[BLAKE3_KEY_LEN] = {0};
 bool        has_key             = false;
 const char *derive_key_context  = NULL;
+// ------------------------------
+
 
 void run_benchmark_sha(char *filename) {
     FILE *file = fopen(filename, "rb");
@@ -147,13 +143,13 @@ int main(void) {
     }
 
     // create output directory if not exists
-    system("mkdir -p output_data");
+    system("mkdir -p ../output_data");
 
 #ifdef USE_OPENMP
     int tot_num_avail_threads = omp_get_max_threads();
     omp_set_dynamic(0);
 
-    /* for (int num_threads = 4; num_threads <= tot_num_avail_threads; num_threads <<= 1) {
+    /* for (int num_threads = 2; num_threads <= tot_num_avail_threads; num_threads <<= 1) {
         char out_filename[50];
         sprintf(out_filename, "output_data/blake_f_%02d.csv", num_threads);
         file = fopen(out_filename, "w");

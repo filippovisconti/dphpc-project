@@ -24,7 +24,6 @@ void run_test(char *filename, int mode) {
         for (size_t i = 0; i < 64; i++) derive_key_context[i] = i + 3;
         derive_key_context[64] = '\0';
     }
-    // FILE *input = fopen("test_input", "rb");
     FILE *input = fopen(filename, "rb");
 
     if (input == NULL) {
