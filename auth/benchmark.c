@@ -1,5 +1,6 @@
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -32,6 +33,19 @@ void handle_error(int retval) {
     printf("PAPI error %d: %s\n", retval, PAPI_strerror(retval));
     exit(1);
 }
+#elif defined(__x86_64__)
+#include <x86intrin.h>
+unsigned int ui;
+uint64_t     start, end;
+#define PAPI_REGION_BEGIN(name)                                                                    \
+    do { start = __rdtscp(&ui); } while (0)
+
+#define PAPI_REGION_END(name)                                                                      \
+    do {                                                                                           \
+        end = __rdtscp(&ui);                                                                       \
+        fprintf(file, "%llu,", (long long)end - start);                                            \
+        fflush(file);                                                                              \
+    } while (0)
 #else
 #define PAPI_REGION_BEGIN(name) (void)0;  // printf("PAPI not enabled - region %s start\n", name);
 
@@ -41,7 +55,7 @@ void handle_error() {
     exit(1);
 }
 #endif
-
+FILE       *file;
 uint8_t     key[BLAKE3_KEY_LEN] = {0};
 bool        has_key             = false;
 const char *derive_key_context  = NULL;
@@ -75,23 +89,20 @@ void run_benchmark_f(char *filename) {
     uint8_t *output = malloc(OUTPUT_LEN);
     assert(output != NULL);
 
-    PAPI_REGION_BEGIN("blake3_f");
+    PAPI_REGION_BEGIN("blake_f");
     myblake(filename, output, OUTPUT_LEN, has_key, key, derive_key_context, 0);
-    PAPI_REGION_END("blake3_f");
+    PAPI_REGION_END("blake_f");
 
     free(output);
 }
 
 void run_benchmark_d(char *filename) {
     uint8_t *output = malloc(OUTPUT_LEN);
-    PAPI_REGION_BEGIN("blake3_d");
-    blake(filename, false, NULL, NULL, output, OUTPUT_LEN,
-#ifdef USE_OPENMP
-        MULTI_THREAD);
-#else
-        SINGLE_THREAD);
-#endif
-    PAPI_REGION_END("blake3_d");
+    assert(output != NULL);
+
+    PAPI_REGION_BEGIN("blake_d");
+    blake(filename, false, NULL, NULL, output, OUTPUT_LEN);
+    PAPI_REGION_END("blake_d");
 
     free(output);
 }
@@ -135,30 +146,52 @@ int main(void) {
         strcat(filename[size], suffix);
     }
 
+    // create output directory if not exists
+    system("mkdir -p output_data");
+
 #ifdef USE_OPENMP
-    int num_avail_threads = omp_get_max_threads();
+    int tot_num_avail_threads = omp_get_max_threads();
     omp_set_dynamic(0);
-    printf("[INFO:] Max number of threads: %d\n", num_avail_threads);
-    for (size_t size = 0; size < num_sizes; size++) {
-        for (int i = 0; i < REPETITIONS; i++) {
-            printf("\r[INFO:] Running f_benchmark for %5s, %2d", sizes[size], i);
-            omp_set_num_threads(num_avail_threads);
-            // run_benchmark_f(filename[size]);
-            fflush(stdout);
+
+    /* for (int num_threads = 4; num_threads <= tot_num_avail_threads; num_threads <<= 1) {
+        char out_filename[50];
+        sprintf(out_filename, "output_data/blake_f_%02d.csv", num_threads);
+        file = fopen(out_filename, "w");
+        printf("[INFO:] Max number of threads: %d\n", num_threads);
+        for (size_t size = 0; size < num_sizes; size++) {
+            for (int i = 0; i < REPETITIONS; i++) {
+                printf("\r[INFO:] Running f_benchmark for %5s, %2d", sizes[size], i);
+                omp_set_num_threads(num_threads);
+                run_benchmark_f(filename[size]);
+                fflush(stdout);
+            }
+            printf(" done\n");
+            fprintf(file, "\n");
         }
-        printf(" done\n");
+        fclose(file);
+    } */
+    // goto skip;
+
+    for (int num_threads = 2; num_threads <= tot_num_avail_threads; num_threads <<= 1) {
+        char out_filename[50];
+        sprintf(out_filename, "output_data/blake_d_%02d.csv", num_threads);
+        file = fopen(out_filename, "w");
+
+        for (size_t size = 0; size < num_sizes; size++) {
+            for (int i = 0; i < REPETITIONS; i++) {
+                printf("\r[INFO:] Running d_benchmark for %5s, %2d", sizes[size], i);
+                omp_set_num_threads(num_threads);
+                run_benchmark_d(filename[size]);
+                fflush(stdout);
+            }
+            printf(" done\n");
+            fprintf(file, "\n");
+        }
+        fclose(file);
     }
 
-    for (size_t size = 0; size < num_sizes; size++) {
-        for (int i = 0; i < REPETITIONS; i++) {
-            printf("\r[INFO:] Running d_benchmark for %5s, %2d", sizes[size], i);
-            omp_set_num_threads(num_avail_threads);
-            run_benchmark_d(filename[size]);
-            fflush(stdout);
-        }
-        printf(" done\n");
-    }
 #else
+    file = fopen("output_data/blake_f.csv", "w");
     for (size_t size = 0; size < num_sizes; size++) {
         for (int i = 0; i < REPETITIONS; i++) {
             printf("\r[INFO:] Running f benchmark for %5s, %2d", sizes[size], i);
@@ -166,8 +199,11 @@ int main(void) {
             fflush(stdout);
         }
         printf(" done\n");
+        fprintf(file, "\n");
     }
+    fclose(file);
 
+    file = fopen("output_data/blake_d.csv", "w");
     for (size_t size = 0; size < num_sizes; size++) {
         for (int i = 0; i < REPETITIONS; i++) {
             printf("\r[INFO:] Running d benchmark for %5s, %2d", sizes[size], i);
@@ -175,8 +211,11 @@ int main(void) {
             fflush(stdout);
         }
         printf(" done\n");
+        fprintf(file, "\n");
     }
+    fclose(file);
 
+    file = fopen("output_data/blake3_ref.csv", "w");
     for (size_t size = 0; size < num_sizes; size++) {
         for (int i = 0; i < REPETITIONS; i++) {
             printf("\r[INFO:] Running ref benchmark for %5s, %2d", sizes[size], i);
@@ -184,7 +223,11 @@ int main(void) {
             fflush(stdout);
         }
         printf(" done\n");
+        fprintf(file, "\n");
     }
+    fclose(file);
+
+    file = fopen("output_data/sha256.csv", "w");
     for (size_t size = 0; size < num_sizes; size++) {
         for (int i = 0; i < REPETITIONS; i++) {
             printf("\r[INFO:] Running sha benchmark for %5s, %2d", sizes[size], i);
@@ -192,8 +235,13 @@ int main(void) {
             fflush(stdout);
         }
         printf(" done\n");
+        fprintf(file, "\n");
     }
+    fclose(file);
 #endif
+// #ifdef USE_OPENMP
+// skip:
+// #endif
     for (size_t i = 0; i < num_sizes; i++) free(filename[i]);
     free(filename);
     return 0;

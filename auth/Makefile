@@ -1,105 +1,71 @@
-FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O2 -march=native -fopenmp
-FLAGS += -g3 -ggdb
-# FLAGS+=-DBENCHMARK
-# FLAGS+=-DDEBUG
+FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O3 -march=native
 INCLUDES := -I include
+L := -lm
 UNAME := $(shell uname -m)
-CC := gcc
-TEST_SOURCES := myblake.c blake.c quick_test.c utils.c
-BLAKE_SOURCES := myblake.c utils.c
-BENCHMARK_SOURCES := benchmark.c myblake.c blake.c sha256.c utils.c
-NUM_THREADS := 32
+SRC =  blake_f.c blake_d.c blake_ref.c utils.c
 
-test: clean
-	$(CC) $(FLAGS)  -o test $(TEST_SOURCES) $(INCLUDES) -lm
-	# ./test
-
-test_mp: clean
-	$(CC) $(FLAGS) -DUSE_OPENMP -o test $(TEST_SOURCES) $(INCLUDES) -lm
-	OMP_NUM_THREADS=$(NUM_THREADS) ./test
+TEST_SOURCES := $(SRC) quick_test.c
+BLAKE_SOURCES := blake_d.c blake_f.c utils.c main.c
+BENCHMARK_SOURCES := benchmark.c $(SRC) sha256.c
+NUM_THREADS := 64
 
 ifeq ($(UNAME), arm64)
 CC := gcc-13
-
-blake: clean
-	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -o blake $(BLAKE_SOURCES) $(INCLUDES)
-
-blake_mp: clean
-	@$(CC) $(FLAGS) -DMYBLAKE_MAIN -DUSE_OPENMP  -o blake $(BLAKE_SOURCES) $(INCLUDES)
-
-run: blake
-	./blake
-
-run_mp: blake_mp
-	OMP_NUM_THREADS=$(NUM_THREADS) ./blake
-
-benchmark: clean
-	$(CC) $(FLAGS) -DBENCHMARK -o benchmark $(BENCHMARK_SOURCES) $(INCLUDES)
-	./benchmark
-
-benchmark_mp: clean
-	$(CC) $(FLAGS) -DBENCHMARK -DUSE_OPENMP -o benchmark $(BENCHMARK_SOURCES) $(INCLUDES)
-	OMP_NUM_THREADS=$(NUM_THREADS) ./benchmark
-
-clean:
-	@rm -fR blake *.dSYM/ test benchmark
-
+FLAGS += -fopenmp
 else
-
-# ------------- running on x86_64 -------------
-# FLAGS += -DUSE_PAPI
-PAPI_EVENTS := PAPI_TOT_CYC
-PAPI_OUTPUT_DIRECTORY := "measurements"
-PAPI_DEBUG := HIGHLEVEL
-PAPI_EXPORT := PAPI_EVENTS="$(PAPI_EVENTS)"
-PAPI_EXPORT += PAPI_OUTPUT_DIRECTORY=$(PAPI_OUTPUT_DIRECTORY) PAPI_DEBUG=${PAPI_DEBUG}
-# PAPI_EXPORT := LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) PAPI_EVENTS="$(PAPI_EVENTS)"
-
-INCLUDES := -I include
-# INCLUDES :=  -I include -I/${PAPI_DIR}/include  -I${CPATH}
-L := -L${LD_LIBRARY_PATH} -L/${PAPI_DIR}/lib -lm -lpapi
-
-blake:
-	$(CC) $(FLAGS) -o blake $(BLAKE_SOURCES) $(INCLUDES)
-
-print:
-	python3 ${PAPI_ROOT}/bin/papi_hl_output_writer.py --source measurements/papi_* --notation=derived --type=detail > papi.log
-
-benchmark: clean
-	$(CC) $(FLAGS) -DBENCHMARK $(INCLUDES) -o benchmark $(BENCHMARK_SOURCES) $(L)
-
-benchmark_mp: clean
-	$(CC) $(FLAGS) -DBENCHMARK -DUSE_OPENMP $(INCLUDES) -o benchmark $(BENCHMARK_SOURCES) $(L)
-
-run: benchmark
-	$(PAPI_EXPORT) ./benchmark
-
-run_mp: benchmark_mp
-	OMP_NUM_THREADS=$(NUM_THREADS) $(PAPI_EXPORT) ./benchmark
-
-compile: clean
-	echo "Compiling with PAPI on for x86_64"
-	$(CC) $(FLAGS) -o main $(INCLUDES) -lpapi $(FILES)
-
-debug: clean
-	$(CC) $(FLAGS) -ggdb -g -o main $(INCLUDES) -lpapi $(FILES)
-
-clean:
-	rm -fR main benchmark test slurm-*
-
+CC := icc
+FLAGS += -qopenmp
 endif
 
-all: blake
+# ------------ data generation ---------------
+gen_sh:
+	@mkdir -p input_data
+	bash gen.sh
 
-gen:
-	sh gen_test_data.sh
+gen_py:
+	@mkdir -p input_data
+	python3 gen.py
 
-# USER=root
-# REMOTE_HOST := priv-testbench
+%_mp: FLAGS += -DUSE_OPENMP
+
+# ------------ tests
+# to silence prints
+test test_mp: FLAGS += -DBENCHMARK
+test test_mp: clean
+	$(CC) $(TEST_SOURCES) $(FLAGS) -o test $(INCLUDES) $(L)
+
+run_test:
+	OMP_NUM_THREADS=$(NUM_THREADS) ./test
+
+# ------------ benchmarks
+benchmark benchmark_mp: FLAGS += -DBENCHMARK
+benchmark benchmark_mp:
+	$(CC) $(BENCHMARK_SOURCES) -o benchmark $(FLAGS) $(INCLUDES) $(L)
+
+run_benchmark:
+	OMP_NUM_THREADS=$(NUM_THREADS) ./benchmark
+
+# ------------ main, combined implementation, auto selection
+blake blake_mp: clean
+	$(CC) $(BLAKE_SOURCES) $(FLAGS) -o blake $(INCLUDES) $(L)
+
+run_main:
+	OMP_NUM_THREADS=$(NUM_THREADS) ./blake
+
+# ------------ run implementations singularly
+blake_f: FLAGS += -DMYBLAKE_MAIN
+blake_d: FLAGS += -DDBLAKE_MAIN
+blake_f blake_d: clean
+	$(CC)  $@.c  utils.c $(FLAGS) -o main $(INCLUDES)
+
+clean:
+	@rm -fR blake *.dSYM/ test benchmark main slurm-*
+# ------------ remote host interaction -----------
 USER=fvisconti
 REMOTE_HOST := euler
 REMOTE_DIR := /cluster/home/${USER}/blake
-TO_COPY := Makefile *.c include *.json *.sh gen.py input_sizes.txt
+TO_COPY := Makefile *.c include *.sh gen.py
+#input_sizes.txt
 
 ssh-copy:
 	@rsync -avz $(TO_COPY) $(USER)@$(REMOTE_HOST):$(REMOTE_DIR)
@@ -109,3 +75,18 @@ ssh-download:
 
 ssh-run:
 	@ssh $(USER)@$(REMOTE_HOST) -t "sbatch batch_script.sh"
+
+
+# ------------ AULT ------------------------------
+AULT_HOST := ault-ela
+AULT_USER := fviscont
+AULT_DIR := /scratch/${AULT_USER}/blake
+
+ault-copy:
+	@rsync -avz $(TO_COPY) $(AULT_USER)@$(AULT_HOST):$(AULT_DIR)
+
+ault-download:
+	rsync -avz $(AULT_USER)@$(AULT_HOST):$(AULT_DIR)/measurements/ ./ault_papi_output
+
+ault-bash:
+	srun -n1 -N1 -w ault02 --time=12:00:00 --mem=300G --pty bash
