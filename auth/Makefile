@@ -2,19 +2,24 @@ FLAGS := -Wall -Wextra -Werror -pedantic -std=c99 -O3 -march=native
 INCLUDES := -I include
 L := -lm
 UNAME := $(shell uname -m)
+SRC_DIR := src
 SRC =  blake_f.c blake_d.c blake_ref.c utils.c
+SRC := $(addprefix $(SRC_DIR)/, $(SRC))
 
-TEST_SOURCES := $(SRC) quick_test.c
+TEST_SOURCES := $(SRC) $(SRC_DIR)/quick_test.c
 BLAKE_SOURCES := blake_d.c blake_f.c utils.c main.c
-BENCHMARK_SOURCES := benchmark.c $(SRC) sha256.c
+BLAKE_SOURCES := $(addprefix $(SRC_DIR)/, $(BLAKE_SOURCES))
+
+BENCHMARK_SOURCES := $(SRC_DIR)/{benchmark.c,sha256.c} $(SRC)
 NUM_THREADS := 64
 
+FLAGS += -fopenmp
 ifeq ($(UNAME), arm64)
 CC := gcc-13
-FLAGS += -fopenmp
 else
-CC := icc
-FLAGS += -qopenmp
+CC := gcc
+# FLAGS += -qopenmp
+# LD_LIBRARY_PATH=/opt/intel/composer_xe_2011_sp1.7.256/compiler/lib/intel64:$LD_LIBRARY_PATH
 endif
 
 # ------------ data generation ---------------
@@ -86,7 +91,6 @@ ault-copy:
 	@rsync -avz $(TO_COPY) $(AULT_USER)@$(AULT_HOST):$(AULT_DIR)
 
 ault-download:
-	rsync -avz $(AULT_USER)@$(AULT_HOST):$(AULT_DIR)/measurements/ ./ault_papi_output
-
+	rsync -avz $(AULT_USER)@$(AULT_HOST):$(AULT_DIR)/output_data/ .
 ault-bash:
 	srun -n1 -N1 -w ault02 --time=12:00:00 --mem=300G --pty bash

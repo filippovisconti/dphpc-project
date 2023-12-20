@@ -3,9 +3,9 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+
 #include "reference_impl.h"
 
-#define MAX_CHUNKS       2097152
 #define BLAKE3_BLOCK_CAP 16
 #define CACHE_LINE_SIZE  64
 
