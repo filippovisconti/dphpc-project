@@ -47,7 +47,7 @@ def plot_data(v: str = 'f', skip: int = 9):
 
     # iterate over all files in the directory output_data
     to_plot = []
-    for filename in sorted(os.listdir("output_data"), reverse=True):
+    for filename in sorted(os.listdir("ault_output_data"), reverse=True):
         if not filename.endswith(".csv"):
             continue
         func_name = filename.split(".")[0][:-3]
@@ -57,7 +57,7 @@ def plot_data(v: str = 'f', skip: int = 9):
     medians = []
     devs = []
     for fn_name, n_thr in to_plot:
-        data = parse_csv(f"output_data/{fn_name}_{n_thr.zfill(2)}.csv")
+        data = parse_csv(f"ault_output_data/{fn_name}_{n_thr.zfill(2)}.csv")
         print(f"Preparing data for {fn_name} , {n_thr} threads")
         tmp_lst = []
         tmp_devs = []
@@ -89,7 +89,7 @@ def plot_data(v: str = 'f', skip: int = 9):
 
     if v == 'f':
         ax.set(xlabel='Input Sizes', ylabel='Throughput (B/c)',
-               title='Benchmark Results - Full Tree Version')
+               title='Benchmark Results - Full Tree Version - Vectorized')
     else:
         ax.set(xlabel='Input Sizes', ylabel='Throughput (B/c)',
                title='Benchmark Results - Stack Version')

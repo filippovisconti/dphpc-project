@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <strings.h>
 
+#include "blake3_impl.h"
 static uint32_t base_IV[8] = {
     0x6A09E667,
     0xBB67AE85,
@@ -330,13 +331,22 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
         assert(buffer_b != NULL);
 
         uint8_t a_or_b = 1;
-
+#ifndef NO_VECTORIZE
+        uint8_t out16[64];
+#else
         uint32_t out16[16];
+#endif
+
         for (int i = 0; i < (current_number_of_nodes >> 1); i++) {
             memcpy(message_words + 0, (&chunk_chaining_values[2 * i + 0]), 32);
             memcpy(message_words + 8, (&chunk_chaining_values[2 * i + 1]), 32);
 
+#ifndef NO_VECTORIZE
+            blake3_compress_xof_sse41(input_chaining_value, (uint8_t *)message_words,
+                BLAKE3_BLOCK_LEN, 0, PARENT | base_flags, (uint8_t *)out16);
+#else
             compress(input_chaining_value, message_words, 0, 64, PARENT | base_flags, out16);
+#endif
 
             memcpy(buffer_a + i, out16, 8 * sizeof(uint32_t));
         }
@@ -353,7 +363,12 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
                     memcpy(message_words + 8, &buffer_b[2 * i + 1][0], 32);
                 }
 
+#ifndef NO_VECTORIZE
+                blake3_compress_xof_sse41(input_chaining_value, (uint8_t *)message_words,
+                    BLAKE3_BLOCK_LEN, 0, PARENT | base_flags, (uint8_t *)out16);
+#else
                 compress(input_chaining_value, message_words, 0, 64, PARENT | base_flags, out16);
+#endif
 
                 memcpy((a_or_b) ? &buffer_b[i] : &buffer_a[i], out16, UINT32_8);
             }
@@ -393,7 +408,13 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
 
         if (current_number_of_nodes <= 2) flags |= ROOT;
 
+// compress(IV, message_words, counter_t, 64, flags, out16);
+#ifndef NO_VECTORIZE
+        blake3_compress_xof_sse41(
+            IV, (uint8_t *)message_words, BLAKE3_BLOCK_LEN, counter_t, flags, (uint8_t *)out16);
+#else
         compress(IV, message_words, counter_t, 64, flags, out16);
+#endif
         assert(i < (current_number_of_nodes >> 1));
 
         memcpy(buffer_a + i, out16, UINT32_8);
@@ -414,7 +435,12 @@ void myblake(char *filename, uint8_t *output, size_t output_len, bool has_key, u
                 memcpy(message_words + 8, &buffer_b[2 * i + 1][0], 32);
             }
 
+#ifndef NO_VECTORIZE
+            blake3_compress_xof_sse41(
+                IV, (uint8_t *)message_words, BLAKE3_BLOCK_LEN, counter_t, flags, (uint8_t *)out16);
+#else
             compress(IV, message_words, counter_t, 64, flags, out16);
+#endif
             memcpy((a_or_b) ? &buffer_b[i] : &buffer_a[i], out16, UINT32_8);
         }
         current_number_of_nodes >>= 1;

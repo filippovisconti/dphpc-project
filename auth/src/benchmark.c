@@ -154,7 +154,7 @@ int main(void) {
     int tot_num_avail_threads = omp_get_max_threads();
     omp_set_dynamic(0);
     printf("[INFO:] total number of available threads: %d\n", tot_num_avail_threads);
-    /* for (int num_threads = 2; num_threads <= tot_num_avail_threads; num_threads <<= 1) {
+    for (int num_threads = 2; num_threads <= tot_num_avail_threads; num_threads <<= 1) {
         char out_filename[50];
         sprintf(out_filename, "output_data/blake_f_%02d.csv", num_threads);
         file = fopen(out_filename, "w");
@@ -172,7 +172,7 @@ int main(void) {
             fprintf(file, "\n");
         }
         fclose(file);
-    } */
+    }
 
     for (int num_threads = 2; num_threads <= tot_num_avail_threads; num_threads <<= 1) {
         char out_filename[50];
