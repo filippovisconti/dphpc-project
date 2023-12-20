@@ -12,7 +12,6 @@ def parse_csv(filename: str) -> list[np.ndarray]:
     try:
         data = pd.read_csv(filename, header=None, sep=",")
         np_arrays = [np.array(row)[:-1] for _, row in data.iterrows()]
-        print("np_arrays", len(np_arrays))
         return np_arrays
 
     except Exception as e:
@@ -44,10 +43,8 @@ def grab_input_sizes():
     return input_sizes, raw_input_sizes
 
 
-def plot_data(v: str = 'f'):
+def plot_data(v: str = 'f', skip: int = 9):
 
-    input_sizes, raw_input_sizes = grab_input_sizes()
-    print(raw_input_sizes)
     # iterate over all files in the directory output_data
     to_plot = []
     for filename in sorted(os.listdir("output_data"), reverse=True):
@@ -73,15 +70,14 @@ def plot_data(v: str = 'f'):
             tmp_devs.append(std_dev)
         devs.append(tmp_devs)
         medians.append(tmp_lst)
-    print(len(medians))
-    print(len(devs))
+
     plt.style.use("ggplot")
     plt.figure(figsize=(13, 12))
-    fig, ax = plt.subplots(dpi=600)
-    skip = 9
+    _, ax = plt.subplots(dpi=600)
+
     for k, (func_name, n_th) in enumerate(to_plot):
-        print("Output", func_name, n_th)
-        print(len(medians[k]), len(devs[k]), len(input_sizes))
+        print("plotting", func_name, n_th)
+        # print(len(medians[k]), len(devs[k]), len(input_sizes))
         ax.errorbar(
             x=input_sizes[:len(medians[k])][skip:],
             y=medians[k][skip:], yerr=devs[k][skip:],
@@ -91,8 +87,13 @@ def plot_data(v: str = 'f'):
             # barsabove=True,
             capsize=2, fmt='o', markersize=3)
 
-    ax.set(xlabel='Input Sizes', ylabel='Throughput (B/c)',
-           title='Benchmark Results - Full Tree Version')
+    if v == 'f':
+        ax.set(xlabel='Input Sizes', ylabel='Throughput (B/c)',
+               title='Benchmark Results - Full Tree Version')
+    else:
+        ax.set(xlabel='Input Sizes', ylabel='Throughput (B/c)',
+               title='Benchmark Results - Stack Version')
+
     plt.legend(facecolor="white")
     plt.grid(axis="x", color="#E5E5E5")
     plt.xscale("log")
@@ -104,14 +105,20 @@ def plot_data(v: str = 'f'):
     ax.legend()
     if not os.path.exists("figures"):
         os.makedirs("figures")
-    txt = "Higher is better.  AMD EPYC 7501 @ 2GHz, 64 cores, 512GB RAM. GCC compiler, -O3 optimization level."
-    plt.figtext(0.5, -0.1, txt, wrap=True, horizontalalignment='center', fontsize=8)
+    txt = "Higher is better. AMD EPYC 7501 @ 2GHz, 64 cores, 512GB RAM. GCC compiler, -O3 optimization level."
+    plt.figtext(0.5, -0.1, txt, wrap=True,
+                horizontalalignment='center', fontsize=8)
 
-    filename: str = "figures/plot_cumulative_f.png"
+    filename: str = f"figures/plot_cumulative_{v}.png"
 
     plt.savefig(filename, bbox_inches="tight", pad_inches=0.1)
+    print(f"Plot saved to {filename}")
+    print("---------------")
 
 
+input_sizes, raw_input_sizes = grab_input_sizes()
 if __name__ == "__main__":
+    pprint(raw_input_sizes)
+    print("---------------")
     plot_data(v='f')
-    plot_data(v='d')
+    plot_data(v='d', skip=0)

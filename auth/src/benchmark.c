@@ -33,7 +33,7 @@ void handle_error(int retval) {
     printf("PAPI error %d: %s\n", retval, PAPI_strerror(retval));
     exit(1);
 }
-#else
+#elif defined(__x86_64__)
 #include <x86intrin.h>
 unsigned int ui;
 uint64_t     start, end;
@@ -46,6 +46,10 @@ uint64_t     start, end;
         fprintf(file, "%llu,", (long long)end - start);                                            \
         fflush(file);                                                                              \
     } while (0)
+#else
+#define PAPI_REGION_BEGIN(name) (void)0;
+#define PAPI_REGION_END(name)   (void)0;
+
 #endif
 
 // ------ GLOBAL VARIABLES ------
@@ -54,7 +58,6 @@ uint8_t     key[BLAKE3_KEY_LEN] = {0};
 bool        has_key             = false;
 const char *derive_key_context  = NULL;
 // ------------------------------
-
 
 void run_benchmark_sha(char *filename) {
     FILE *file = fopen(filename, "rb");
@@ -104,7 +107,6 @@ void run_benchmark_d(char *filename) {
 }
 
 int main(void) {
-    endianCheckPrint();
     char prefix[] = "input_data/input_";
     char suffix[] = ".txt";
     char sizes[50][10];  // Assuming a maximum of 50 entries with a maximum size of 10 characters
@@ -143,17 +145,22 @@ int main(void) {
     }
 
     // create output directory if not exists
-    system("mkdir -p ../output_data");
+#ifdef __x86_64__
+    system("mkdir -p output_data");
+#endif
 
+    // Run benchmarks
 #ifdef USE_OPENMP
     int tot_num_avail_threads = omp_get_max_threads();
     omp_set_dynamic(0);
-
+    printf("[INFO:] total number of available threads: %d\n", tot_num_avail_threads);
     /* for (int num_threads = 2; num_threads <= tot_num_avail_threads; num_threads <<= 1) {
         char out_filename[50];
         sprintf(out_filename, "output_data/blake_f_%02d.csv", num_threads);
         file = fopen(out_filename, "w");
-        printf("[INFO:] Max number of threads: %d\n", num_threads);
+
+        printf("[INFO:] current number of threads: %d\n", num_threads);
+
         for (size_t size = 0; size < num_sizes; size++) {
             for (int i = 0; i < REPETITIONS; i++) {
                 printf("\r[INFO:] Running f_benchmark for %5s, %2d", sizes[size], i);
@@ -166,12 +173,13 @@ int main(void) {
         }
         fclose(file);
     } */
-    // goto skip;
 
     for (int num_threads = 2; num_threads <= tot_num_avail_threads; num_threads <<= 1) {
         char out_filename[50];
         sprintf(out_filename, "output_data/blake_d_%02d.csv", num_threads);
         file = fopen(out_filename, "w");
+
+        printf("[INFO:] current number of threads: %d\n", num_threads);
 
         for (size_t size = 0; size < num_sizes; size++) {
             for (int i = 0; i < REPETITIONS; i++) {
@@ -235,9 +243,7 @@ int main(void) {
     }
     fclose(file);
 #endif
-// #ifdef USE_OPENMP
-// skip:
-// #endif
+
     for (size_t i = 0; i < num_sizes; i++) free(filename[i]);
     free(filename);
     return 0;
