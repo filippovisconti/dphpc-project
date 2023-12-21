@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "reference_impl.h"
 
@@ -25,15 +26,20 @@ static uint32_t IV[8] = {
 };
 
 inline static size_t store_chunks(
-    chunk_state* chunks, size_t pos, const void* input, size_t input_len) {
+    chunk_state* chunks, char* input, uint64_t input_len) {
     size_t counter      = 0;
-    size_t bytes_copied = 0;
+    uint64_t bytes_copied = 0;
+
+    FILE* input_stream = fopen(input, "rb");
+    if (input_stream == NULL) {
+        printf("Can't open file\n");
+        exit(1);
+    }
+
     while (bytes_copied < input_len) {
-        chunk_state* curr_chunk = chunks + pos;
-        // todo: only works for even blocks
-        memcpy(curr_chunk->block, ((char*)input) + bytes_copied, BLAKE3_CHUNK_LEN);
+        chunk_state* curr_chunk = chunks + counter;
+        fread(curr_chunk->block, BLAKE3_CHUNK_LEN, 1, input_stream);
         counter++;
-        pos++;
         bytes_copied += BLAKE3_CHUNK_LEN;
     }
     return counter;
@@ -131,6 +137,15 @@ inline static void compress(const uint32_t chaining_value[8], const uint32_t blo
     }
 
     memcpy(out, state, sizeof(state));
+}
+
+inline static uint64_t get_size(char *filename) {
+    FILE *input = fopen(filename, "rb");
+    assert(input != NULL);
+    fseek(input, 0L, SEEK_END);
+    uint64_t size = ftell(input);
+    fclose(input);
+    return size;
 }
 
 void blake(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY_LEN],

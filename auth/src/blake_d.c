@@ -6,37 +6,23 @@
 #include <stdlib.h>
 #include <sys/types.h>
 
-uint64_t MAX_CHUNKS = 128L << 20L;
-
 void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool has_key,
     const uint8_t key[BLAKE3_KEY_LEN], const char* key_context, uint32_t init_flags,
     uint8_t* output, size_t out_len);
 
 void blake(char* test_file, bool has_key, const uint8_t key[BLAKE3_KEY_LEN],
     const char* key_context, uint8_t* output, size_t out_len) {
-    // open input stream
-    FILE* input_stream = fopen(test_file, "rb");
-    if (input_stream == NULL) {
-        printf("Can't open file\n");
-        exit(1);
-    }
 
     // read input into buf, store_chunks in chunk state
-    chunk_state*  input_chunks = (chunk_state*)malloc(MAX_CHUNKS * sizeof(chunk_state));
+    uint64_t size = get_size(test_file);
+    chunk_state*  input_chunks = (chunk_state*)malloc((size >> 10) * sizeof(chunk_state));
     size_t        nchunks      = 0;
-    unsigned char buf[65536];
-    while (1) {
-        ssize_t n = fread(buf, 1, sizeof(buf), input_stream);
-        if (n > 0) {
-            nchunks += store_chunks(input_chunks, nchunks, buf, n);
-        } else if (n == 0) {
-            break;  // end of file
-        } else {
-            fprintf(stderr, "read failed: %s\n", strerror(errno));
-            exit(1);
-        }
+    if (size > 0) {
+        nchunks += store_chunks(input_chunks, test_file, size);
+    } else {
+        fprintf(stderr, "read failed: %s\n", strerror(errno));
+        exit(1);
     }
-    fclose(input_stream);
 
     // call blake3_chunk_state_hasher on chunk_state
     blake3_chunk_state_hasher(input_chunks, nchunks, has_key, key, key_context, 0, output, out_len);
@@ -58,7 +44,7 @@ void blake3_chunk_state_hasher(chunk_state* input_chunks, size_t nchunks, bool h
         chunk_state* key_context_chunks =
             malloc(sizeof(chunk_state) * strlen(key_context) / BLAKE3_CHUNK_LEN);
         size_t num_context_chunks =
-            store_chunks(key_context_chunks, 0, key_context, strlen(key_context));
+            store_chunks(key_context_chunks, (char *)key_context, strlen(key_context));
 
         // compress the context string
         uint8_t context_out[BLAKE3_KEY_LEN];
