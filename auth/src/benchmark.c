@@ -60,27 +60,27 @@ const char *derive_key_context  = NULL;
 // ------------------------------
 
 void run_benchmark_sha(char *filename) {
-    FILE *file = fopen(filename, "rb");
-    assert(file != NULL);
+    FILE *sha_file = fopen(filename, "rb");
+    assert(sha_file != NULL);
 
     PAPI_REGION_BEGIN("sha256");
-    calculate_sha256(file);
+    calculate_sha256(sha_file);
     PAPI_REGION_END("sha256");
 
-    fclose(file);
+    fclose(sha_file);
 }
 
 void run_benchmark_ref(char *filename) {
-    FILE *file = fopen(filename, "r");
-    assert(file != NULL);
+    FILE *ref_file = fopen(filename, "r");
+    assert(ref_file != NULL);
     uint8_t *output = malloc(OUTPUT_LEN);
     assert(output != NULL);
 
     PAPI_REGION_BEGIN("ref_blake3");
-    blake3(has_key, key, derive_key_context, OUTPUT_LEN, file, output);
+    blake3(has_key, key, derive_key_context, OUTPUT_LEN, ref_file, output);
     PAPI_REGION_END("ref_blake3");
 
-    fclose(file);
+    fclose(ref_file);
     free(output);
 }
 
@@ -154,7 +154,8 @@ int main(void) {
     int tot_num_avail_threads = omp_get_max_threads();
     omp_set_dynamic(0);
     printf("[INFO:] total number of available threads: %d\n", tot_num_avail_threads);
-    /* for (int num_threads = 2; num_threads <= tot_num_avail_threads; num_threads <<= 1) {
+
+    for (int num_threads = 2; num_threads <= tot_num_avail_threads; num_threads <<= 1) {
         char out_filename[50];
         sprintf(out_filename, "output_data/blake_f_%02d.csv", num_threads);
         file = fopen(out_filename, "w");
@@ -172,7 +173,7 @@ int main(void) {
             fprintf(file, "\n");
         }
         fclose(file);
-    } */
+    }
 
     for (int num_threads = 2; num_threads <= tot_num_avail_threads; num_threads <<= 1) {
         char out_filename[50];

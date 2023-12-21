@@ -1,5 +1,6 @@
 #include <stdint.h>
 
+#include "blake3_impl.h"
 #include "blake_f.h"
 
 static uint32_t base_IV[8] = {
@@ -217,9 +218,15 @@ void compute_chunk_chaining_values(uint32_t *int_IV, char *read_buffer, int num_
         if (num_blocks == 1) assert(flags == (CHUNK_START | CHUNK_END));
 
         const uint32_t *input_chaining_value = (block == 0) ? int_IV : chaining_value;
-        uint32_t        out16[16];
+#ifndef NO_VECTORIZE
+        uint8_t out16[64];
+        blake3_compress_xof_sse41(input_chaining_value, (uint8_t *)output_blocks, BLAKE3_BLOCK_LEN,
+            counter_t, flags, out16);
+#else
+        uint32_t out16[16];
         compress(input_chaining_value, output_blocks, counter_t, BLAKE3_BLOCK_LEN, flags, out16);
+#endif
 
-        memcpy(chaining_value, out16, sizeof(out16) >> 1);
+        memcpy(chaining_value, out16, 8 * sizeof(uint32_t));
     }
 }

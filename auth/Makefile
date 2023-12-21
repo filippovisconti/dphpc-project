@@ -3,11 +3,11 @@ INCLUDES := -I include
 L := -lm
 UNAME := $(shell uname -m)
 SRC_DIR := src
-SRC =  blake_f.c blake_d.c blake_ref.c utils.c
+SRC =  blake_f.c blake_d.c blake_ref.c utils.c blake3_sse41.c
 SRC := $(addprefix $(SRC_DIR)/, $(SRC))
 
 TEST_SOURCES := $(SRC) $(SRC_DIR)/quick_test.c
-BLAKE_SOURCES := blake_d.c blake_f.c utils.c main.c
+BLAKE_SOURCES := blake_d.c blake_f.c utils.c main.c blake3_sse41.c
 BLAKE_SOURCES := $(addprefix $(SRC_DIR)/, $(BLAKE_SOURCES))
 
 BENCHMARK_SOURCES := $(SRC_DIR)/{benchmark.c,sha256.c} $(SRC)
@@ -69,7 +69,7 @@ clean:
 USER=fvisconti
 REMOTE_HOST := euler
 REMOTE_DIR := /cluster/home/${USER}/blake
-TO_COPY := Makefile *.c include *.sh gen.py
+TO_COPY := Makefile src include scripts
 #input_sizes.txt
 
 ssh-copy:
@@ -91,6 +91,6 @@ ault-copy:
 	@rsync -avz $(TO_COPY) $(AULT_USER)@$(AULT_HOST):$(AULT_DIR)
 
 ault-download:
-	rsync -avz $(AULT_USER)@$(AULT_HOST):$(AULT_DIR)/output_data/ .
+	rsync -avz $(AULT_USER)@$(AULT_HOST):$(AULT_DIR)/output_data/ ault_output_data
 ault-bash:
 	srun -n1 -N1 -w ault02 --time=12:00:00 --mem=300G --pty bash
