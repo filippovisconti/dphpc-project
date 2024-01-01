@@ -17,7 +17,7 @@
 
 % Title.
 % ------
-\title{A Descriptive Title, not too general, not too long}
+\title{Implementation of an optimized authenticated encryption scheme}
 %
 % Single address.
 % ---------------
@@ -50,37 +50,53 @@
 \maketitle
 %
 
-The hard page limit is 6 pages in this style. Do not reduce font size
-or use other tricks to squeeze. This pdf is formatted in the American letter format, so the spacing may look a bit strange when printed out.
+% The hard page limit is 6 pages in this style. Do not reduce font size
+% or use other tricks to squeeze. This pdf is formatted in the American letter format, so the spacing may look a bit strange when printed out.
 
 \begin{abstract}
-Describe in concise words what you do, why you do it (not necessarily
-in this order), and the main result.  The abstract has to be
-self-contained and readable for a person in the general area. You
-should write the abstract last.
+% Describe in concise words what you do, why you do it (not necessarily
+% in this order), and the main result.  The abstract has to be
+% self-contained and readable for a person in the general area.
+You should write the abstract last.
 \end{abstract}
 
 \section{Introduction}\label{sec:intro}
 
-Do not start the introduction with the abstract or a slightly modified
-version. It follows a possible structure of the introduction.
-Note that the structure can be modified, but the
-content should be the same. Introduction and abstract should fill at most the first page, better less.
+% Do not start the introduction with the abstract or a slightly modified
+% version. It follows a possible structure of the introduction.
+% Note that the structure can be modified, but the
+% content should be the same. Introduction and abstract should fill at most the first page, better less.
 
-\mypar{Motivation} The first task is to motivate what you do.  You can
-start general and zoom in one the specific problem you consider.  In
-the process you should have explained to the reader: what you are doing,
-why you are doing, why it is important (order is usually reversed).
+\mypar{Motivation}
+% The first task is to motivate what you do.  You can
+% start general and zoom in one the specific problem you consider.  In
+% the process you should have explained to the reader: what you are doing,
+% why you are doing, why it is important (order is usually reversed).
+%
+% For example, if my result is the fastest sorting implementation ever, one
+% could roughly go as follows. First explain why sorting is important
+% (used everywhere with a few examples) and why performance matters (large datasets,
+% realtime). Then explain that fast implementations are very hard and
+% expensive to get (memory hierarchy, vector, parallel).
+%
+% Now you state what you do in this paper. In our example:
+% presenting a sorting implementation that is
+% faster for some sizes as all the other ones.
+In an era dominated by the exponential growth of data and the increasing prevalence of digital communication,
+the imperative to secure sensitive information has never been more crucial.
+As technology advances, so do the challenges in maintaining the confidentiality and integrity of data exchanged over networks.
+This project embarks on a journey through the implementation of a cutting-edge,
+optimized, high-performance authenticated encryption scheme.
+The motivation behind this endeavor stems from the need for robust cryptographic solutions, which still achieve good runtimes.
+Authenticated encryption schemes are a fundamental building block of modern cryptography, which
+are used to provide confidentiality, integrity and authenticity of data.
+Their use is widespread in many applications, such as TLS, SSH, IPsec, and many others.
+Leveraging the combination of ChaCha20 and Blake3, our project aims to prioritize efficiency and speed.
 
-For example, if my result is the fastest sorting implementation ever, one
-could roughly go as follows. First explain why sorting is important
-(used everywhere with a few examples) and why performance matters (large datasets,
-realtime). Then explain that fast implementations are very hard and
-expensive to get (memory hierarchy, vector, parallel).
+The key difference between authenticated encryption schemes and encryption schemes
+is that the former also provide integrity and authenticity of data, while the latter only provides confidentiality.
 
-Now you state what you do in this paper. In our example:
-presenting a sorting implementation that is
-faster for some sizes as all the other ones.
+
 
 \mypar{Related work} Next, you have to give a brief overview of
 related work. For a report like this, anywhere between 2 and 8
@@ -88,36 +104,80 @@ references. Briefly explain what they do. In the end contrast to what
 you do to make now precisely clear what your contribution is.
 
 \section{Background: Whatever the Background is}\label{sec:background}
+In this section, we give a brief overview of the background necessary to understand the rest of the report.
+In particular, we introduce the concepts of encryption and authentication, and we explain the algorithms we use.
+% Give a short, self-contained summary of necessary
+% background information. For example, assume you present an
+% implementation of sorting algorithms. You could organize into sorting
+% definition, algorithms considered, and asymptotic runtime statements. The goal of the
+% background section is to make the paper self-contained for an audience
+% as large as possible. As in every section
+% you start with a very brief overview of the section. Here it could be as follows: In this section
+% we formally define the sorting problem we consider and introduce the algorithms we use
+% including a cost analysis.
 
-Give a short, self-contained summary of necessary
-background information. For example, assume you present an
-implementation of sorting algorithms. You could organize into sorting
-definition, algorithms considered, and asymptotic runtime statements. The goal of the
-background section is to make the paper self-contained for an audience
-as large as possible. As in every section
-you start with a very brief overview of the section. Here it could be as follows: In this section
-we formally define the sorting problem we consider and introduce the algorithms we use
-including a cost analysis.
+\mypar{Encryption}
+% Precisely define sorting problem you consider.
 
-\mypar{Sorting}
-Precisely define sorting problem you consider.
+\mypar{Authentication}
+Authentication is the process through which the integrity and origin of data are verified, to ensure that
+is has not been tampered with, and to confirm that it was sent by the expected sender.
+This process is critical in various fields, such as secure communication, electronic commerce, and many others.
 
-\mypar{Sorting algorithms}
-Explain the algorithm you use including their costs.
+In order to achieve authentication, a Message Authentication Code is usually used. A MAC is a short piece of information
+that is used to authenticate a message, in combination with a secret key. The receiver of the message can verify the authenticity
+of the message by recomputing the MAC and comparing it with the original MAC.
 
-As an aside, don't talk about "the complexity of the algorithm.'' It's incorrect,
-problems have a complexity, not algorithms.
-
+% As an aside, don't talk about "the complexity of the algorithm.'' It's incorrect,
+% problems have a complexity, not algorithms.
+\mypar{Blake3}
+We chose Blake3 for the authentication part of the scheme, due to its high performance and security guarantees.
+By design, Blake3 is also highly parallelizable, which makes it a good candidate for our implementation.
+For the implementation, we used the C language and two different approaches:
+one implementation is using a stack, which is more versatile,
+and the other one uses a more efficient divide-and-conquer approach, which is a bit less flexible, despite performing much better.
+Blake3 is a cryptographic hash function which also provides a MAC function, the one we're interested in.
+At a high level, Blake3 works by splitting the input into chunks of size up to 1024 bytes, and then compressing them using a compression function, which
+performs a series of operations on the input, and returns a 64B output, named the chaining value.
+The chaining value is then used as input for the next chunk, and the process is repeated until all the chunks have been processed.
+These chunks form the leaves of a binary tree, which is traversed from the bottom up, until the root is reached, by combining the chaining values of the children nodes, two at a time.
+After a number of iterations, we're left with a single node, the root node, whose chaining value is the output of the algorithm.
+By repeating the last call to the compression function with an increased counter, we can obtain an output of arbitrary length.
 
 \section{Your Proposed Method}\label{sec:yourmethod}
+In this section, we dive into the details of our implementation. We describe how we implemented the algorithms,
+and we explain the optimizations we used to achieve high performance.
+% Now comes the ``beef'' of the report, where you explain what you
+% did. Again, organize it in paragraphs with titles. As in every section
+% you start with a very brief overview of the section.
+%
+% In this section, structure is very important so one can follow the technical content.
+%
+\mypar{Blake3}
+In this subsection, we describe our implementations of the Blake3 algorithm, which are based on and closely follow the original Blake3 paper that describes the algorithm in detail.
+Given their different strenghts and characteristics, we also included a dispatcher that chooses the best implementation based on the input size, to always guarantee a correct output.
+\mypar{Stack version}
+TODO
 
-Now comes the ``beef'' of the report, where you explain what you
-did. Again, organize it in paragraphs with titles. As in every section
-you start with a very brief overview of the section.
+\mypar{Divide-and-conquer version}
+The divide-and-conquer version of the algorithm is based on the assumption that all of our input is available at the beginning of the computation.
+This allows us to evenly distribute the work among the threads, which have no dependencies on each other, since each thread works on a different portion of the input.
+The threads work in parallel until they reach the base case, which is when the input size is small enough to be processed sequentially.
+At this point, the threads return the result to the parent thread, which combines them and returns the final result.
+\begin{figure}[h]
+  \begin{center}
+    \includegraphics[width=0.45\textwidth]{figures/div_conq.png}
+  \end{center}
+  \caption{High-level visualization of the divide and conquer approach}\label{fig:divide_and_conquer}
+\end{figure}
 
-In this section, structure is very important so one can follow the technical content.
+To achieve this, we use the OpenMP library, which allows us to easily parallelize the computation once we have created the parallel region.
+In addition to that, we vectorized the compression function, which is the most computationally intensive part of the algorithm, using the AVX instruction set and the code available on GitHub from the reference implementation.
 
-Mention and cite any external resources that you used including libraries or other code.
+The main advantage of this approach is that it's very scalable, since the work is evenly distributed among the threads, and the threads have no dependencies on each other. This allows us to achieve very good speedups, as we will see in the results section.
+The main disadvantages are that it's not very flexible, since it requires all of the input to be available at the beginning of the computation (although this is not a limitation for us), and that is less flexible, as, to achieve its maximum potential,
+it requires the input to be full trees.
+TODO Mention and cite any external resources that you used including libraries or other code.
 
 \section{Experimental Results}\label{sec:exp}
 
