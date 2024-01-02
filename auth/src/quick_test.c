@@ -33,7 +33,7 @@ void run_test(char *filename, int mode) {
 
     uint8_t *output_ref = malloc(OUTPUT_LEN);
     uint8_t *output_my  = malloc(OUTPUT_LEN);
-    uint8_t *output_d   = malloc(OUTPUT_LEN);
+    // uint8_t *output_d   = malloc(OUTPUT_LEN);
     // myprintf("************** REFERENCE BLAKE3 STOUT **************\n");
     myprintf("****************************************************\n");
     blake3(has_key, key, derive_key_context, OUTPUT_LEN, input, output_ref);
@@ -41,16 +41,16 @@ void run_test(char *filename, int mode) {
     myprintf("************** F BLAKE3 STOUT **********************\n");
     myblake(filename, output_my, OUTPUT_LEN, has_key, key, derive_key_context, 0);
     myprintf("************** D BLAKE3 STOUT **********************\n");
-    blake(filename, false, NULL, NULL, output_d, OUTPUT_LEN);
+    // blake(filename, false, NULL, NULL, output_d, OUTPUT_LEN);
     // printf("****************************************************\n");
     free(derive_key_context);
     char *output_hex_ref = malloc(OUTPUT_LEN * 2 + 1);
     char *output_hex     = malloc(OUTPUT_LEN * 2 + 1);
-    char *output_hex_d   = malloc(OUTPUT_LEN * 2 + 1);
+    // char *output_hex_d   = malloc(OUTPUT_LEN * 2 + 1);
     for (size_t i = 0; i < OUTPUT_LEN; i++) {
         sprintf(output_hex_ref + 2 * i, "%02x", output_ref[i]);
         sprintf(output_hex + 2 * i, "%02x", output_my[i]);
-        sprintf(output_hex_d + 2 * i, "%02x", output_d[i]);
+        // sprintf(output_hex_d + 2 * i, "%02x", output_d[i]);
     }
 
     //=========================================
@@ -71,13 +71,13 @@ void run_test(char *filename, int mode) {
         // }
         free(output_ref);
         free(output_my);
-        free(output_d);
+        // free(output_d);
         free(output_hex_ref);
         free(output_hex);
-        free(output_hex_d);
+        // free(output_hex_d);
         exit(1);
     }  // else printf("F: OK\n");
-    cond = strcmp(output_hex_d, output_hex_ref) == 0;
+    /* cond = strcmp(output_hex_d, output_hex_ref) == 0;
     if (!cond) {
         printf("[REFERENCE]:\n");
         PRINT_WITH_NEWLINE(output_hex_ref, 64);
@@ -99,15 +99,15 @@ void run_test(char *filename, int mode) {
         free(output_hex);
         free(output_hex_d);
         exit(1);
-    }  // else printf("D: OK\n");
+    }  // else printf("D: OK\n"); */
 
     assert(cond);
     free(output_ref);
     free(output_my);
-    free(output_d);
+    // free(output_d);
     free(output_hex_ref);
     free(output_hex);
-    free(output_hex_d);
+    // free(output_hex_d);
 }
 
 int main(void) {

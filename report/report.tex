@@ -160,15 +160,37 @@ TODO Mention and cite any external resources that you used including libraries o
 
 \section{Experimental Results}\label{sec:exp}
 
-Here you evaluate your work using experiments. You start again with a
-very short summary of the section. The typical structure follows.
+% Here you evaluate your work using experiments. You start again with a
+% very short summary of the section. The typical structure follows.
 
-\mypar{Experimental setup} Specify the platform (processor, frequency, maybe OS, maybe cache sizes)
-as well as the compiler, version, and flags used. If your work is about performance,
-I strongly recommend that you play with optimization flags and consider also icc for additional potential speedup.
+In this section, we will describe the experiments we conducted to evaluate our implementations.
+We will first describe the experimental setup, then we will present the results of our experiments, and finally, we will discuss the results.
 
-Then explain what kind of benchmarks you ran. The idea is to give enough information so the experiments are reproducible by somebody else on his or her code.
-For sorting you would talk about the input sizes. For a tool that performs NUMA optimization, you would specify the programs you ran.
+\mypar{Experimental setup}
+We ran all of our experiments on the Ault Cluster of CSCS. In particular, we chose two nodes with the following specifications:
+\begin{itemize}
+  \item Node 1: $2$x AMD EPYC $7501$ $32$ cores @ $2.0$ GHz
+  \item Node 2: $2$x AMD EPYC $7742$ $64$ cores @ $2.25$ GHz
+  \item $512$ GB RAM
+  \item OS: Rocky Linux release 8.4 (Green Obsidian)
+  \item Kernel: Linux 4.18.0-305.19.1.el8\_4.x86\_64
+\end{itemize}
+
+We used the following compiler and flags:
+\begin{itemize}
+  \item \texttt{gcc 10.3.0}
+  \item \texttt{-O3 -march=native -fopenmp}
+\end{itemize}
+% Specify the platform (processor, frequency, maybe OS, maybe cache sizes)
+% as well as the compiler, version, and flags used. If your work is about performance,
+% I strongly recommend that you play with optimization flags and consider also icc for additional potential speedup.
+
+% Then explain what kind of benchmarks you ran. The idea is to give enough information so the experiments are reproducible by somebody else on his or her code.
+% For sorting you would talk about the input sizes. For a tool that performs NUMA optimization, you would specify the programs you ran.
+
+We decided to benchmark our implementations over varying input sizes, ranging from $1$KB to $128$GB,
+to evaluate their performance across a wide range of use cases.
+We also included the reference implementation of the respective functions in our benchmarks to provide a single-threaded baseline for comparison.
 
 \mypar{Results}
 Next divide the experiments into classes, one paragraph for each. In each class of experiments you typically pursue one questions that then is answered by a suitable plot or plots. For example, first you may want to investigate the performance behavior with changing input size, then how your code compares to external benchmarks.

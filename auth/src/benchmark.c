@@ -174,7 +174,7 @@ int main(void) {
         }
         fclose(file);
     }
-
+    goto skip_d;
     for (int num_threads = 2; num_threads <= tot_num_avail_threads; num_threads <<= 1) {
         char out_filename[50];
         sprintf(out_filename, "output_data/blake_d_%02d.csv", num_threads);
@@ -194,7 +194,7 @@ int main(void) {
         }
         fclose(file);
     }
-
+skip_d:
 #else
     file = fopen("output_data/blake_f.csv", "w");
     for (size_t size = 0; size < num_sizes; size++) {

@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 
 repetitions: int = 15
 
+txt = "Higher is better. AMD EPYC 7742 @ 2.25GHz, 128 cores, 512GB RAM. GCC compiler, -O3 optimization level."
+
 
 def parse_csv(filename: str) -> list[np.ndarray]:
 
@@ -43,6 +45,10 @@ def grab_input_sizes():
 
         input_sizes.append(size)
     return input_sizes, raw_input_sizes
+
+
+def get_th_number_from_filename(filename):
+    return int(filename.split('_')[-1].split('.')[0])
 
 
 def plot_data_single(skip: int = 9,
@@ -105,7 +111,6 @@ def plot_data_single(skip: int = 9,
     ax.legend()
     if not os.path.exists("figures"):
         os.makedirs("figures")
-    txt = "Higher is better. AMD EPYC 7501 @ 2GHz, 64 cores, 512GB RAM. GCC compiler, -O3 optimization level."
     plt.figtext(0.5, -0.1, txt, wrap=True,
                 horizontalalignment='center', fontsize=8)
 
@@ -123,11 +128,16 @@ def plot_data(v: str = 'f', skip: int = 9,
 
     # iterate over all files in the directory output_data
     to_plot = []
-    for filename in sorted(os.listdir(dir_path), reverse=True):
+    for filename in sorted(os.listdir(dir_path),
+                           key=get_th_number_from_filename, reverse=True):
         if not filename.endswith(".csv"):
             continue
-        func_name = filename.split(".")[0][:-3]
-        num_threads = (filename.split(".")[0].split("_")[-1])
+        if '128' in filename:
+            func_name = filename.split(".")[0][:-4]
+            num_threads = '128'
+        else:
+            func_name = filename.split(".")[0][:-3]
+            num_threads = (filename.split(".")[0].split("_")[-1])
         if func_name == f'blake_{v}':
             to_plot.append((func_name, num_threads))
     medians = []
@@ -178,15 +188,14 @@ def plot_data(v: str = 'f', skip: int = 9,
     ax.set_xticks(ticks=input_sizes[skip:end],
                   labels=raw_input_sizes[skip:end], minor=False)
     plt.xticks(rotation=90)
-    ax.set_ylim(-0.5, 10.5)
+    # ax.set_ylim(-0.5, 22.5)
     ax.legend()
     if not os.path.exists("figures"):
         os.makedirs("figures")
-    txt = "Higher is better. AMD EPYC 7501 @ 2GHz, 64 cores, 512GB RAM. GCC compiler, -O3 optimization level."
     plt.figtext(0.5, -0.1, txt, wrap=True,
                 horizontalalignment='center', fontsize=8)
 
-    filename: str = f"figures/{filename_prefix}_plot_cumulative_{v}.png"
+    filename: str = f"figures/zoom_{filename_prefix}_plot_cumulative_{v}.png"
 
     plt.savefig(filename, bbox_inches="tight", pad_inches=0.1)
     print(f"Plot saved to {filename}")
@@ -197,14 +206,12 @@ input_sizes, raw_input_sizes = grab_input_sizes()
 if __name__ == "__main__":
     pprint(raw_input_sizes)
     print("---------------")
-    dir_path = "output_data/single"
-    filename_prefix = "single"
-    plot_data_single(skip=0, dir_path=dir_path,
-                     filename_prefix=filename_prefix)
-    exit(0)
+    # dir_path = "output_data/single"
+    # filename_prefix = "single"
+    # plot_data_single(skip=0, dir_path=dir_path,
+    #                  filename_prefix=filename_prefix)
     filename_prefix = "nonvec"
-    plot_data(v='d', skip=0, dir_path=dir_path,
-              filename_prefix=filename_prefix)
+    plot_data(v='d', skip=9, filename_prefix=filename_prefix)
     for skip in [0, 10]:
         dir_path = "output_data/nonvec_output_data"
         title = 'Benchmark Results - Full Tree Version - Not Vectorized'
@@ -221,4 +228,4 @@ if __name__ == "__main__":
             filename_prefix = "vec_full"
         plot_data(v='f', skip=skip, dir_path=dir_path,
                   title=title, filename_prefix=filename_prefix)
-    # plot_data(v='d', skip=0)
+        plot_data(v='d', skip=0)

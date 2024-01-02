@@ -111,6 +111,50 @@ void compress(const uint32_t chaining_value[8], const uint32_t block_words[16], 
 #endif
 }
 
+void compress_opt(const uint32_t chaining_value[8], const uint32_t block_words[16],
+    uint64_t counter, uint32_t block_len, uint32_t flags, uint32_t out[8]) {
+    (void)block_len;
+    uint32_t state[16] = {
+        chaining_value[0],
+        chaining_value[1],
+        chaining_value[2],
+        chaining_value[3],
+        chaining_value[4],
+        chaining_value[5],
+        chaining_value[6],
+        chaining_value[7],
+        base_IV[0],
+        base_IV[1],
+        base_IV[2],
+        base_IV[3],
+        (uint32_t)counter,
+        (uint32_t)(counter >> 32),
+        block_len,
+        flags,
+    };
+    uint32_t block[16];
+    memcpy(block, block_words, sizeof(block));
+
+    round_function(state, block);  // round 1
+    permute(block);
+    round_function(state, block);  // round 2
+    permute(block);
+    round_function(state, block);  // round 3
+    permute(block);
+    round_function(state, block);  // round 4
+    permute(block);
+    round_function(state, block);  // round 5
+    permute(block);
+    round_function(state, block);  // round 6
+    permute(block);
+    round_function(state, block);  // round 7
+    for (size_t i = 0; i < 8; i++) {
+        state[i] ^= state[i + 8];
+        state[i + 8] ^= chaining_value[i];
+    }
+    memcpy(out, state, 8 * sizeof(uint32_t));
+}
+
 void words_from_little_endian_bytes(const void *bytes, size_t bytes_len, uint32_t *out) {
     assert(bytes_len % 4 == 0);
     const uint8_t *u8_ptr = (const uint8_t *)bytes;
@@ -189,8 +233,6 @@ int set_num_threads(int num_chunks) {
 
     omp_set_num_threads(num_threads);
 
-    // TODO: not worth parallelizing, use only one thread
-
     myprintf("[OMP] Number of usable threads: %d\n", omp_get_max_threads());
     assert(omp_get_max_threads() == num_threads);
     myprintf("[OMP] Running with num_threads: %d\n", num_threads);
@@ -205,8 +247,6 @@ void compute_chunk_chaining_values(uint32_t *int_IV, char *read_buffer, int num_
     uint64_t counter_t, int chunk, uint32_t chaining_value[8], uint32_t base_flags) {
 
     for (int block = 0; block < num_blocks; block++) {
-        // pad_block_if_necessary(block, num_blocks, remaining, last_chunk, read_buffer);
-
         uint32_t output_blocks[16];
         int      access_index = (chunk % 4) * BLAKE3_CHUNK_LEN + block * BLAKE3_BLOCK_LEN;
         words_from_little_endian_bytes(&read_buffer[access_index], BLAKE3_BLOCK_LEN, output_blocks);
@@ -222,11 +262,10 @@ void compute_chunk_chaining_values(uint32_t *int_IV, char *read_buffer, int num_
         uint8_t out16[64];
         blake3_compress_xof_sse41(input_chaining_value, (uint8_t *)output_blocks, BLAKE3_BLOCK_LEN,
             counter_t, flags, out16);
-#else
-        uint32_t out16[16];
-        compress(input_chaining_value, output_blocks, counter_t, BLAKE3_BLOCK_LEN, flags, out16);
-#endif
-
         memcpy(chaining_value, out16, 8 * sizeof(uint32_t));
+#else
+        compress_opt(input_chaining_value, output_blocks, counter_t, BLAKE3_BLOCK_LEN, flags,
+            chaining_value);
+#endif
     }
 }

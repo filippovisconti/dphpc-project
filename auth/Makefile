@@ -11,7 +11,7 @@ BLAKE_SOURCES := blake_d.c blake_f.c utils.c main.c blake3_sse41.c
 BLAKE_SOURCES := $(addprefix $(SRC_DIR)/, $(BLAKE_SOURCES))
 
 BENCHMARK_SOURCES := $(SRC_DIR)/{benchmark.c,sha256.c} $(SRC)
-NUM_THREADS := 64
+NUM_THREADS := 128
 
 FLAGS += -fopenmp
 ifeq ($(UNAME), arm64)
