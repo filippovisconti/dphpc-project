@@ -111,8 +111,9 @@ void compress(const uint32_t chaining_value[8], const uint32_t block_words[16], 
 #endif
 }
 
-void compress_opt(const uint32_t chaining_value[8], const uint32_t block_words[16],
-    uint64_t counter, uint32_t block_len, uint32_t flags, uint32_t out[8]) {
+void compress_opt(const uint32_t chaining_value[8], const uint32_t block_words[],
+    const uint32_t block_words2[], uint64_t counter, uint32_t block_len, uint32_t flags,
+    uint32_t out[8]) {
     (void)block_len;
     uint32_t state[16] = {
         chaining_value[0],
@@ -133,7 +134,8 @@ void compress_opt(const uint32_t chaining_value[8], const uint32_t block_words[1
         flags,
     };
     uint32_t block[16];
-    memcpy(block, block_words, sizeof(block));
+    memcpy(block, block_words, sizeof(block) >> 1);
+    memcpy(block + 8, block_words2, sizeof(block) >> 1);
 
     round_function(state, block);  // round 1
     permute(block);
@@ -259,13 +261,12 @@ void compute_chunk_chaining_values(uint32_t *int_IV, char *read_buffer, int num_
 
         const uint32_t *input_chaining_value = (block == 0) ? int_IV : chaining_value;
 #ifndef NO_VECTORIZE
-        uint8_t out16[64];
-        blake3_compress_xof_sse41(input_chaining_value, (uint8_t *)output_blocks, BLAKE3_BLOCK_LEN,
-            counter_t, flags, out16);
-        memcpy(chaining_value, out16, 8 * sizeof(uint32_t));
+        blake3_compress_xof_sse41_opt(input_chaining_value, (uint8_t *)output_blocks,
+            (uint8_t *)(output_blocks + 8), BLAKE3_BLOCK_LEN, counter_t, flags,
+            (uint8_t *)chaining_value);
 #else
-        compress_opt(input_chaining_value, output_blocks, counter_t, BLAKE3_BLOCK_LEN, flags,
-            chaining_value);
+        compress_opt(input_chaining_value, output_blocks, output_blocks + 8, counter_t,
+            BLAKE3_BLOCK_LEN, flags, chaining_value);
 #endif
     }
 }
