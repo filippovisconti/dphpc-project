@@ -309,7 +309,7 @@ auth/test
 auth/Makefile_old
 
 enc/input_data/
-enc/bin
+enc/bin*
 enc/output_data/*_out
 enc/output_data/*.png
 enc/callgrind/call*
