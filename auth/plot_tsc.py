@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 repetitions: int = 15
 
-txt = "Higher is better. AMD EPYC 7742 @ 2.25GHz, 128 cores, 512GB RAM. GCC compiler, -O3 optimization level."
+# txt = "Higher is better. AMD EPYC 7742 @ 2.25GHz, 128 cores, 512GB RAM. GCC compiler, -O3 optimization level."
 
 
 def parse_csv(filename: str) -> list[np.ndarray]:
@@ -48,6 +48,8 @@ def grab_input_sizes():
 
 
 def get_th_number_from_filename(filename):
+    if "Store" in filename:
+        return 999
     return int(filename.split('_')[-1].split('.')[0])
 
 
@@ -74,7 +76,7 @@ def plot_data_single(skip: int = 9,
         for i, row in enumerate(data):
             arr = row
             arr = input_sizes[i] / arr
-            median = np.median(arr)
+            median = 2.25*np.median(arr)
             std_dev = np.std(arr)
             tmp_lst.append(median)
             tmp_devs.append(std_dev)
@@ -85,7 +87,8 @@ def plot_data_single(skip: int = 9,
     plt.figure(figsize=(13, 12))
     _, ax = plt.subplots(dpi=600)
 
-    end = len(input_sizes)
+    end = len(input_sizes)-3
+    # end = len(input_sizes)
 
     for k, func_name in enumerate(to_plot):
         print("plotting", func_name)
@@ -103,7 +106,7 @@ def plot_data_single(skip: int = 9,
     plt.grid(axis="x", color="#E5E5E5")
     plt.xscale("log")
     plt.minorticks_off()
-    ax.set(xlabel='Input Sizes', ylabel='Throughput (B/c)',
+    ax.set(xlabel='Input Sizes', ylabel='Throughput (GB/sec)',
            title='Benchmark Results - Single Threaded Comparison')
     ax.set_xticks(ticks=input_sizes[skip:end],
                   labels=raw_input_sizes[skip:end], minor=False)
@@ -111,12 +114,13 @@ def plot_data_single(skip: int = 9,
     ax.legend()
     if not os.path.exists("figures"):
         os.makedirs("figures")
-    plt.figtext(0.5, -0.1, txt, wrap=True,
-                horizontalalignment='center', fontsize=8)
+    # plt.figtext(0.5, -0.1, txt, wrap=True,
+    #             horizontaalignment='center', fontsize=8)
 
-    filename: str = f"figures/{filename_prefix}_plot_cumulative.png"
+    filename: str = f"figures/{filename_prefix}_plot_cumulative.svg"
 
-    plt.savefig(filename, bbox_inches="tight", pad_inches=0.1)
+    plt.savefig(filename, format='svg', dpi=1200,
+                bbox_inches="tight", pad_inches=0.1)
     print(f"Plot saved to {filename}")
     print("---------------")
 
@@ -131,6 +135,10 @@ def plot_data(v: str = 'f', skip: int = 9,
     for filename in sorted(os.listdir(dir_path),
                            key=get_th_number_from_filename, reverse=True):
         if not filename.endswith(".csv"):
+            continue
+        if '04' in filename:
+            continue
+        if '08' in filename:
             continue
         if '128' in filename:
             func_name = filename.split(".")[0][:-4]
@@ -150,7 +158,7 @@ def plot_data(v: str = 'f', skip: int = 9,
         for i, row in enumerate(data):
             arr = row
             arr = input_sizes[i] / arr
-            median = np.median(arr)
+            median = 2.25*np.median(arr)
             std_dev = np.std(arr)
             tmp_lst.append(median)
             tmp_devs.append(std_dev)
@@ -175,10 +183,10 @@ def plot_data(v: str = 'f', skip: int = 9,
             capsize=2, fmt='o', markersize=3)
 
     if v == 'f':
-        ax.set(xlabel='Input Sizes', ylabel='Throughput (B/c)',
+        ax.set(xlabel='Input Sizes', ylabel='Throughput (GB/s)',
                title=title)
     else:
-        ax.set(xlabel='Input Sizes', ylabel='Throughput (B/c)',
+        ax.set(xlabel='Input Sizes', ylabel='Throughput (GB/s)',
                title='Benchmark Results - Stack Version')
 
     plt.legend(facecolor="white")
@@ -188,16 +196,17 @@ def plot_data(v: str = 'f', skip: int = 9,
     ax.set_xticks(ticks=input_sizes[skip:end],
                   labels=raw_input_sizes[skip:end], minor=False)
     plt.xticks(rotation=90)
-    # ax.set_ylim(-0.5, 22.5)
+    # ax.set_ylim(-0.5, 46.5)
     ax.legend()
     if not os.path.exists("figures"):
         os.makedirs("figures")
-    plt.figtext(0.5, -0.1, txt, wrap=True,
-                horizontalalignment='center', fontsize=8)
+    # plt.figtext(0.5, -0.1, txt, wrap=True,
+    #             horizontalalignment='center', fontsize=8)
 
-    filename: str = f"figures/zoom_{filename_prefix}_plot_cumulative_{v}.png"
+    filename: str = f"figures/{filename_prefix}_plot_cumulative_{v}.svg"
 
-    plt.savefig(filename, bbox_inches="tight", pad_inches=0.1)
+    plt.savefig(filename, format='svg', dpi=2400,
+                bbox_inches="tight", pad_inches=0.1)
     print(f"Plot saved to {filename}")
     print("---------------")
 
@@ -206,26 +215,26 @@ input_sizes, raw_input_sizes = grab_input_sizes()
 if __name__ == "__main__":
     pprint(raw_input_sizes)
     print("---------------")
-    # dir_path = "output_data/single"
-    # filename_prefix = "single"
-    # plot_data_single(skip=0, dir_path=dir_path,
-    #                  filename_prefix=filename_prefix)
-    filename_prefix = "nonvec"
-    plot_data(v='d', skip=9, filename_prefix=filename_prefix)
+    dir_path = "output_data/single"
+    filename_prefix = "single"
+    plot_data_single(skip=0, dir_path=dir_path,
+                     filename_prefix=filename_prefix)
+    # filename_prefix = "nonvec"
+    # plot_data(v='d', skip=9, filename_prefix=filename_prefix)
     for skip in [0, 10]:
-        dir_path = "output_data/nonvec_output_data"
-        title = 'Benchmark Results - Full Tree Version - Not Vectorized'
-        filename_prefix = "nonvec"
-        if skip == 0:
-            filename_prefix = "nonvec_full"
-        plot_data(v='f', skip=skip, dir_path=dir_path,
-                  title=title, filename_prefix=filename_prefix)
-
+        # dir_path = "output_data/nonvec_output_data"
+        # title = 'Full Tree Version - Not Vectorized'
+        # filename_prefix = "nonvec"
+        # if skip == 0:
+        #     filename_prefix = "nonvec_full"
+        # plot_data(v='f', skip=skip, dir_path=dir_path,
+        #           title=title, filename_prefix=filename_prefix)
+        #
         dir_path = "output_data/vec_output_data"
-        title = 'Benchmark Results - Full Tree Version - Vectorized'
-        filename_prefix = "vec"
+        title = 'Full Tree Version - Vectorized'
+        filename_prefix = "baseline_vec"
         if skip == 0:
-            filename_prefix = "vec_full"
+            filename_prefix = "baseline_vec_full"
         plot_data(v='f', skip=skip, dir_path=dir_path,
                   title=title, filename_prefix=filename_prefix)
         plot_data(v='d', skip=0)

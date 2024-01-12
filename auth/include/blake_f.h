@@ -40,6 +40,9 @@ int next_multiple_of_64(int n);
 void words_from_little_endian_bytes(const void *bytes, size_t bytes_len, uint32_t *out);
 void compress(const uint32_t chaining_value[8], const uint32_t block_words[16], uint64_t counter,
     uint32_t block_len, uint32_t flags, uint32_t out[16]);
+void compress_opt(const uint32_t chaining_value[8], const uint32_t block_words[],
+    const uint32_t block_words2[], uint64_t counter, uint32_t block_len, uint32_t flags,
+    uint32_t out[8]);
 void compute_chunk_chaining_values(uint32_t *int_IV, char *read_buffer, int num_blocks,
     uint64_t counter_t, int chunk, uint32_t chaining_value[8], uint32_t base_flags);
 

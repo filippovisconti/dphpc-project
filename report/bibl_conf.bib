@@ -169,31 +169,91 @@
         }
 
 ------------------------------------------------------------------------
-
-@BOOK{Higham:98,
-        AUTHOR =        {N.J. Higham},
-        TITLE =         {Handbook of Writing for Mathematical Sciences},
-        PUBLISHER =     {SIAM},
-        YEAR =          {1998}
-        }
-
-@Book{Strunk:00,
-  author = 	 {W. Strunk~Jr. and E.B. White},
-  title = 	 {Elements of Style},
-  publisher = 	 {Longman},
-  year = 	 {2000},
-  edition = 	 {4th}
-}
-
-@MISC{Pueschel:10,
-        Author =        {M.~P\"uschel},
-        Title =         {Benchmarking comments},
-        Howpublished =  {online:~http://people.inf.ethz.ch/markusp/teaching/263-2300-ETH-spring11/slides/class05.pdf}
-        }
-
 @misc{blake,
-    author = {J. O’Connor, J. Aumasson, S. Neves, Z. Wilcox-O’Hearn},
+    author = {J. O’Connor et al.},
     title = {BLAKE3 one function, fast everywhere},
-    howpublished = {online:~https://blake3.io},
+    howpublished = {[Online] https://blake3.io},
     year = {2019},
 }
+
+@misc{gitblake,
+    author = {J. O’Connor et al.},
+    title = {BLAKE3 Repository},
+    howpublished = {[Online] https://github.com/BLAKE3-team/BLAKE3/},
+    year = {2019},
+    
+}
+
+@misc{chacha20,
+author= {Daniel J. Bernstein},
+title = {ChaCha, a variant of Salsa20},
+Howpublished = {[Online] https://cr.yp.to/chacha/chacha-20080128.pdf},
+year = {2008}
+}
+
+@misc{rfcchacha,
+author= {Internet Research Task Force (IRTF)},
+title = {RFC 7539 - ChaCha20 and Poly1305 for IETF Protocols},
+Howpublished = {[Online] https://datatracker.ietf.org/doc/html/rfc7539},
+year = {2015}
+}
+
+@MANUAL{amd,
+        TITLE =         {High Performance Computing (HPC)
+Tuning Guide for AMD EPYC™ 7002 Series
+Processors},
+        Author =        {AMD},
+        Organization =  {AMD},
+        Address =       {},
+        Edition =       {},
+        Month =         {November},
+        Year =          {2020},
+        Note =          {[Online] https://www.amd.com/content/dam/amd/en/documents/epyc-technical-docs/tuning-guides/amd-epyc-7002-tg-hpc-56827.pdf},
+        summary =       {},
+        }
+
+@MANUAL{openMP,
+        TITLE =         {OpenMP Application Programming Interface},
+        Author =        {OpenMP Architecture Review Board},
+        Organization =  {OpenMP},
+        Address =       {},
+        Edition =       {4.5},
+        Month =         {November},
+        Year =          {2015},
+        Note =          {[Online] https://www.openmp.org/wp-content/uploads/openmp-4.5.pdf},
+        summary =       {}
+        }
+
+@misc{amd_mem_barrier,
+author= {Phillip Allen Lane, Jessica Lobrano},
+title = {The AMD Rome Memory Barrier},
+Howpublished = {[Online] https://arxiv.org/pdf/2211.11867.pdf},
+year = {2022}
+}
+
+@misc{Epyc_rome,
+author= {Wikipedia},
+title = {Epyc 7742 - amd.},
+Howpublished = {[Online] https://en.wikichip.org/wiki/amd/epyc/7742},
+year = {2024}
+}
+
+@misc{memory_structure,
+author= {M. Velten et al.},
+title = {Memory performance of amd epyc rome and intel cascade lake sp server processors},
+Howpublished = {[Online] https://doi.org/10.1145/3489525.3511689},
+year = {2022}
+}
+
+@misc{stream,
+author= {AMD},
+title = {STREAM Benchmark},
+Howpublished = {[Online] https://www.amd.com/en/developer/zen-software-studio/applications/spack/stream-benchmark.html},
+year = {2024}
+}
+
+@misc{parallelchacha,
+author = {R. Velea et al.},
+title = {Performance of Parallel ChaCha20 Stream Cipher},
+Howpublished = {[Online] https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&ar-number=7507408},
+year = {2016}}
